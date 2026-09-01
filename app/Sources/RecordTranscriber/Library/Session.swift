@@ -15,12 +15,31 @@ struct Session: Identifiable, Hashable {
     /// a recording ready to transcribe.
     static let partialAudioFileName = "audio.opus.part"
 
+    /// Status is what the list rows report, derived from the files present. There
+    /// is nothing to keep in sync: a folder is in exactly one of these states by
+    /// virtue of what it contains.
+    enum Status: Equatable, Hashable {
+        /// capturing is a part file with no finished audio beside it. The folder
+        /// cannot say whether that capture is running right now or was
+        /// interrupted; only the recorder knows, so the views that care ask it.
+        case capturing
+        /// empty is a folder a recording never wrote anything into.
+        case empty
+        case needsTranscription
+        case ready
+        case complete
+    }
+
     let folder: URL
     let startedAt: Date
+    /// metadata is the `meta.json` sidecar, read once when the session is listed.
+    /// It is nil for sessions recorded before the sidecar existed.
+    let metadata: SessionMetadata?
 
     var id: URL { folder }
     var name: String { folder.lastPathComponent }
     var audioURL: URL { folder.appendingPathComponent(Self.audioFileName) }
+    var partialAudioURL: URL { folder.appendingPathComponent(Self.partialAudioFileName) }
     var summaryURL: URL { folder.appendingPathComponent("\(Self.transcriptBaseName).summary.md") }
     var transcriptBase: URL { folder.appendingPathComponent(Self.transcriptBaseName) }
 
@@ -30,6 +49,19 @@ struct Session: Identifiable, Hashable {
 
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
     var hasSummary: Bool { FileManager.default.fileExists(atPath: summaryURL.path) }
+    var hasTranscript: Bool {
+        FileManager.default.fileExists(atPath: transcriptURL(format: "txt").path)
+    }
+
+    /// status reads the folder in the order the pipeline fills it, so the label
+    /// is always the furthest point the session actually reached.
+    var status: Status {
+        if hasSummary { return .complete }
+        if hasTranscript { return .ready }
+        if hasAudio { return .needsTranscription }
+        if FileManager.default.fileExists(atPath: partialAudioURL.path) { return .capturing }
+        return .empty
+    }
 
     /// transcriptText is the plain-text transcript, or nil when the session has
     /// not been transcribed yet.
@@ -69,5 +101,10 @@ struct Session: Identifiable, Hashable {
     init(folder: URL) {
         self.folder = folder
         startedAt = Session.startDate(ofFolder: folder)
+        metadata = SessionMetadata.load(from: folder)
     }
+
+    /// displayName is what the user reads. The folder name is a sortable
+    /// timestamp meant for the Finder, not something to put in a row.
+    var displayName: String { SessionDateFormat.label(for: startedAt) }
 }

@@ -81,3 +81,51 @@ private let startedAt: Date = {
     #expect(store.sessions.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: session.folder.path))
 }
+
+/// statusFolder writes a session folder containing exactly the named files, so
+/// each status is asserted against the files that produce it.
+private func statusFolder(containing files: [String]) throws -> URL {
+    let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("record-transcriber-tests-\(UUID().uuidString)")
+        .appendingPathComponent("2026-09-01 0314")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    for file in files {
+        try Data("x".utf8).write(to: folder.appendingPathComponent(file))
+    }
+    return folder
+}
+
+@Test func reportsACaptureInProgressWhileOnlyThePartFileExists() throws {
+    let folder = try statusFolder(containing: ["audio.opus.part"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).status == .capturing)
+}
+
+@Test func reportsAFinishedRecordingAsNeedingTranscription() throws {
+    let folder = try statusFolder(containing: ["audio.opus"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).status == .needsTranscription)
+}
+
+@Test func reportsATranscribedRecordingAsReady() throws {
+    let folder = try statusFolder(containing: ["audio.opus", "transcript.txt"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).status == .ready)
+}
+
+@Test func reportsASummarisedRecordingAsComplete() throws {
+    let folder = try statusFolder(containing: ["audio.opus", "transcript.txt", "transcript.summary.md"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).status == .complete)
+}
+
+@Test func reportsAFolderARecordingNeverWroteIntoAsEmpty() throws {
+    let folder = try statusFolder(containing: [])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).status == .empty)
+}

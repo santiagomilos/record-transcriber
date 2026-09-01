@@ -57,8 +57,12 @@ final class AppModel {
     func stopRecording() async {
         guard recorder.isRecording, let session = activeSession else { return }
         activeSession = nil
+        // The recorder's clock is the only measure of the length, and stopping
+        // resets it, so it is read before the capture ends rather than after.
+        let recorded = recorder.elapsed
         do {
             _ = try await recorder.stop()
+            try? SessionMetadata(durationSeconds: recorded).save(to: session.folder)
             library.reload()
             await transcribe(session)
         } catch {
@@ -83,10 +87,26 @@ final class AppModel {
             try await runner.run(input: session.audioURL,
                                  outputBase: session.transcriptBase,
                                  preferences: preferences)
+            recordResult(in: session)
         } catch {
             failure = error.localizedDescription
         }
         library.reload()
+    }
+
+    /// recordResult folds what the pipeline learned about the audio into the
+    /// session's sidecar, keeping whatever duration the recorder already wrote:
+    /// its clock measured the capture, while the pipeline's duration is that of
+    /// the file it decoded.
+    private func recordResult(in session: Session) {
+        guard let result = runner.result else { return }
+        var metadata = SessionMetadata.load(from: session.folder) ?? SessionMetadata()
+        metadata.language = result.language
+        metadata.segments = result.segments
+        if metadata.durationSeconds == 0 {
+            metadata.durationSeconds = Double(result.durationMS) / 1000
+        }
+        try? metadata.save(to: session.folder)
     }
 
     /// importFile copies an existing recording into the library and transcribes
@@ -101,6 +121,7 @@ final class AppModel {
             try await runner.run(input: destination,
                                  outputBase: session.transcriptBase,
                                  preferences: preferences)
+            recordResult(in: session)
             library.reload()
         } catch {
             failure = error.localizedDescription

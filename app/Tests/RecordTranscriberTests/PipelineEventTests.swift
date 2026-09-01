@@ -79,3 +79,13 @@ private let eventStream = """
     #expect(events[5].segments == 167)
     #expect(events[8].path == "/recordings/2026-09-01 0314/transcript.summary.md")
 }
+
+@Test func decodesTheTranscriptEvent() {
+    let event = PipelineEvent.decode(
+        line: #"{"event":"transcript","language":"es","segments":167,"duration_ms":963000,"elapsed_ms":103000}"#)
+    #expect(event?.event == .transcript)
+    #expect(event?.language == "es")
+    #expect(event?.segments == 167)
+    #expect(event?.durationMS == 963000)
+    #expect(event?.elapsedMS == 103000)
+}

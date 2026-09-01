@@ -38,10 +38,22 @@ final class TranscribeRunner {
         }
     }
 
+    /// Result is what the run found out about the recording itself, as opposed
+    /// to the files it wrote.
+    struct Result: Equatable {
+        var language: String?
+        var segments = 0
+        var durationMS: Int64 = 0
+        var elapsedMS: Int64 = 0
+    }
+
     private(set) var phase: Phase = .idle
     private(set) var isRunning = false
     /// outputs maps a kind ("txt", "srt", "vtt", "summary") to the file written.
     private(set) var outputs: [String: URL] = [:]
+    /// result is nil until the pipeline reports its transcript event, which is
+    /// the only place the detected language and the segment count appear.
+    private(set) var result: Result?
 
     @ObservationIgnored private var process: Process?
 
@@ -56,6 +68,7 @@ final class TranscribeRunner {
 
         isRunning = true
         outputs = [:]
+        result = nil
         phase = .extracting
         defer {
             isRunning = false
@@ -124,6 +137,11 @@ final class TranscribeRunner {
             }
         case .progress:
             phase = .transcribing(percent: event.percent)
+        case .transcript:
+            result = Result(language: event.language,
+                            segments: event.segments,
+                            durationMS: event.durationMS,
+                            elapsedMS: event.elapsedMS)
         case .output:
             if let kind = event.kind, let path = event.path {
                 outputs[kind] = URL(fileURLWithPath: path)
