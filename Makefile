@@ -60,7 +60,14 @@ icon:
 ##
 ## `open` rather than running the executable directly: launching it from a
 ## terminal makes macOS attribute the permission prompts to the terminal.
+##
+## Quitting first is what makes this show the build that was just made: `open`
+## on an app that is already running only brings it to the front, so a rebuild
+## keeps displaying the old binary. The app is a menu bar accessory with no
+## window of its own, which makes that easy to miss. Failure is ignored because
+## nothing running is the normal case.
 run: app
+	-osascript -e 'quit app "Record Transcriber"' 2>/dev/null
 	open "$(APP)"
 
 test: test-go test-swift
