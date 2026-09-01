@@ -119,7 +119,13 @@ final class Recorder {
     private func sample() {
         guard let capture, let startedAt else { return }
         levels = capture.levels
-        elapsed = Date().timeIntervalSince(startedAt)
+
+        // The meter runs at 20 Hz but elapsed is only written when its whole
+        // second changes: the menu bar icon observes it, and a status item
+        // redrawn twenty times a second for a value that reads the same is work
+        // nobody sees.
+        let now = Date().timeIntervalSince(startedAt)
+        if Int(now) != Int(elapsed) { elapsed = now }
     }
 
     private static func requestMicrophoneAccess() async -> Bool {
