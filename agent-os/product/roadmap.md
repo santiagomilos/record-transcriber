@@ -33,6 +33,35 @@ That list needs a length per recording, which nothing measured before: the audio
 
 Not done, and deliberately: notarized distribution to other machines. The app is ad-hoc signed for personal use, which costs nothing and needs no Apple Developer Program.
 
+## Phase 2.5: The summary got a design — shipped
+
+The pipeline declared record → transcribe → summarize, but the summarize step was never specified:
+two hand-written prompts, each naming a fixed set of sections, applied to every recording alike.
+`minuta` asked for topics, decisions and action items whether the recording was a requirements
+call, a standup or a voice note.
+
+`-summary auto` is the new default. It lists the facts the transcript supports before writing
+anything — tagged as decisions, commitments, open questions, risks, underlying needs or context —
+and the sections that appear are the ones those facts earned. `resumen` and `minuta` stay for
+pinning a shape, and an install already carrying `minuta` is moved to `auto` once.
+
+The shape is adaptive but there is no meeting-type classifier, which was the obvious design and
+the rejected one (`agent-os/specs/2026-09-01-0524-adaptive-summaries/`). No production notetaker
+documents classifying; the route with published evidence extracts labelled facts and derives the
+outline from them, cutting hallucination and omission from 3 to 1 on a 5-point scale against
+direct prompting. A classifier would have turned a continuous fact distribution into a brittle
+discrete choice.
+
+Three smaller things came out of the same reading. The transcript now reaches Claude timestamped
+and *above* the instruction rather than below it, which is the documented ordering and was
+backwards. Interpretation is quarantined: what was said and what the model concludes never share a
+section. And a transcript is now a valid input, so a summary can be regenerated in seconds without
+decoding the audio again — without which "the summary got better" stays an opinion.
+
+Verified on the same 16-minute Spanish recording as Phase 1: `auto` surfaced the seven questions
+the meeting left open and the fact that it ended without agreement, both of which the old `minuta`
+had flattened into "Temas tratados".
+
 ## Phase 3: Later
 
 - **Speaker diarization** — label who said what. The viable local path is `sherpa-onnx` running pyannote-segmentation-3.0 plus CAM++ as ONNX models, which needs no Python runtime.

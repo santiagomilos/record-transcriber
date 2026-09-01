@@ -69,8 +69,11 @@ transcribe reunion.mp4
 # subtitles only, forcing Spanish instead of detecting it
 transcribe -f srt,vtt -l es reunion.mp4
 
-# transcript plus structured meeting minutes from Claude
-transcribe --summary minuta reunion.mp4
+# transcript plus a summary whose sections follow what the recording turned out to be
+transcribe -summary auto reunion.mp4
+
+# summarize a transcript that already exists, skipping the decode
+transcribe -summary auto reunion.srt
 ```
 
 | Flag | Default | Meaning |
@@ -79,7 +82,7 @@ transcribe --summary minuta reunion.mp4
 | `-f`, `-format` | `txt,srt` | any of `txt`, `srt`, `vtt` |
 | `-l`, `-lang` | `auto` | ISO 639-1 code, or `auto` to detect |
 | `-m`, `-model` | `large-v3-turbo` | ggml model name |
-| `-summary` | `none` | `none`, `resumen`, or `minuta` |
+| `-summary` | `none` | `none`, `auto`, `resumen`, or `minuta` |
 | `-threads` | number of CPUs | decoding threads |
 | `-keep-wav` | off | keep the intermediate 16 kHz WAV |
 | `-json` | off | report progress as one JSON object per line on stdout |
@@ -96,16 +99,31 @@ transcribe -json reunion.opus
 {"event":"output","kind":"txt","path":"/…/reunion.txt"}
 ```
 
-`--summary` drives the `claude` CLI, so it needs Claude Code installed and
+`-summary` drives the `claude` CLI, so it needs Claude Code installed and
 signed in — no API key. Its presence is checked before transcription starts, so
 a missing dependency fails immediately rather than after the decode.
+
+The three kinds differ in who chooses the shape. `resumen` is a paragraph plus
+key points and `minuta` is always topics, decisions and action items, whatever
+the recording held. `auto` decides from the recording: it lists the facts it can
+support before writing anything, tagged as decisions, commitments, open
+questions, risks, underlying needs or context, and the sections that appear are
+the ones those facts earned. A call that ended in disagreement gets its open
+questions; a voice note gets neither those nor an empty heading standing in for
+them. Where the material supports it, `auto` closes with what the stated request
+appears to be after, marked as a reading rather than as something said.
+
+An input that is already a transcript — `.txt`, `.srt` or `.vtt` — skips ffmpeg
+and whisper and only writes the summary next to it, which takes seconds instead
+of a decode. Subtitles are the better input of the three: they still carry the
+segment timings, which the summary uses to follow the order of the conversation.
 
 ## How it works
 
 `ffmpeg` normalizes any input container to the 16 kHz mono 16-bit WAV that
 whisper.cpp requires, `whisper-cli` transcribes it, and the JSON it writes is
-rendered as text or subtitles. `--summary` pipes the transcript into `claude
---print`.
+rendered as text or subtitles. `-summary` sends the transcript to `claude
+--print`, timestamped and above the instruction that acts on it.
 
 Every stage is an external binary, so the Go module itself has no dependencies
 outside the standard library. The app follows the same rule: it uses only
