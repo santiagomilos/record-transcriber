@@ -27,6 +27,10 @@ Proven before the UI was written, on macOS 26.6.2 with an ad-hoc signed bundle: 
 
 The CLI gained a `-json` flag along the way, reporting a run as one JSON event per line so the app can show real progress. Without the flag its output is unchanged.
 
+The UI was reworked afterwards (`agent-os/specs/2026-09-01-0419-menu-bar-panel-redesign/`). The menu bar panel had been three stock buttons; it is now a panel with a header, a record control that states what it captures, live recording and transcription state, and the five newest recordings with their length and status. Preferences became reachable for the first time, the app became a menu bar accessory with no Dock icon, and the panel and window moved onto one fixed dark palette rather than the system appearance.
+
+That list needs a length per recording, which nothing measured before: the audio is Ogg/Opus, which AVFoundation cannot read, so the alternative was an `ffprobe` subprocess per row on every panel open. Each session now carries a `meta.json` written when the recording stops, holding the length plus the language and segment count that `transcribe -json` already reported and the app used to discard. Sessions recorded before it show no length; they are not backfilled.
+
 Not done, and deliberately: notarized distribution to other machines. The app is ad-hoc signed for personal use, which costs nothing and needs no Apple Developer Program.
 
 ## Phase 3: Later

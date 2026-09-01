@@ -23,18 +23,33 @@ on macOS (`~/.cache/...` on Linux): the transcription model, `large-v3-turbo` at
 make run
 ```
 
-A menu bar item starts and stops the recording, with a level meter for the
-microphone and for the system audio separately — the usual failure is capturing
-only your own voice, and one mixed bar hides it. Stopping transcribes the
-recording and generates its minutes without another click.
+The app lives only in the menu bar — no Dock icon. Its panel starts and stops the
+recording, shows a level meter for the microphone and for the system audio
+separately (the usual failure is capturing only your own voice, and one mixed bar
+hides it), reports the transcription phases as they run, lists the five newest
+recordings, and opens preferences. Stopping transcribes the recording and
+generates its minutes without another click. While a recording runs, the menu bar
+icon shows the elapsed time.
 
 Recordings land in `~/Documents/Grabaciones/<date time>/` as plain files
-(`audio.opus`, `transcript.txt`, `transcript.srt`, `transcript.summary.md`), one
-folder per session, changeable in preferences. The folder is the only state the
-app keeps, so a session can be moved, copied or deleted from the Finder.
+(`audio.opus`, `transcript.txt`, `transcript.srt`, `transcript.summary.md`, and a
+small `meta.json`), one folder per session, changeable in preferences. The folder
+is the only state the app keeps, so a session can be moved, copied or deleted
+from the Finder.
 
-The window lists those sessions and shows what each produced. Dragging an
-existing audio or video file onto it runs that file through the same pipeline.
+`meta.json` holds what the files cannot say: the recorded length, the detected
+language and the segment count. It exists because the audio is Ogg/Opus, which
+AVFoundation cannot read, so the alternative was an `ffprobe` subprocess per row
+every time the panel opens. Sessions recorded before it show no length.
+
+The window lists those sessions with their date, length and status, and shows
+what each produced — the transcript as text, the summary rendered as Markdown.
+Dragging an existing audio or video file onto it runs that file through the same
+pipeline.
+
+The panel and the window use a fixed dark palette instead of following the system
+appearance, which is deliberate: the app looks the same everywhere, at the cost of
+a theme maintained by hand in `app/Sources/RecordTranscriber/Views/Theme.swift`.
 
 System audio is captured with a Core Audio process tap, native since macOS 14.4,
 so there is no virtual audio driver to install. Audio is written as Opus at
@@ -110,9 +125,10 @@ make test
 
 Go covers the whisper JSON parser, the three output formats, argument parsing,
 the progress-line parser and both event emitters. Swift covers the event decoder
-on the other side of that boundary, session naming and listing, and the mapping
-from preferences to CLI flags. None of them need ffmpeg, whisper-cli, a model,
-audio hardware, or the network.
+on the other side of that boundary, session naming and listing, the metadata
+sidecar, the status a session derives from its files, the date labels the rows
+show, and the mapping from preferences to CLI flags. None of them need ffmpeg,
+whisper-cli, a model, audio hardware, or the network.
 
 `make test-swift` passes extra flags because swift-testing ships inside the
 Command Line Tools but is not on the default search paths. With Xcode installed
