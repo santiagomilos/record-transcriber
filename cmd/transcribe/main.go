@@ -33,6 +33,9 @@ type config struct {
 	threads     int
 	keepWAV     bool
 	jsonEvents  bool
+	// fromTranscript marks an input that is already text, which skips ffmpeg and
+	// whisper entirely and leaves the summary as the only thing to produce.
+	fromTranscript bool
 }
 
 func main() {
@@ -67,9 +70,6 @@ func transcribe(cfg config, events progress.Emitter) error {
 	// Everything that can fail without doing work fails here, so a missing
 	// dependency or credential surfaces in a second rather than after a long
 	// transcription.
-	if err := checkDependencies(); err != nil {
-		return err
-	}
 	if _, err := os.Stat(cfg.input); err != nil {
 		return fmt.Errorf("cannot read input file: %w", err)
 	}
@@ -77,6 +77,12 @@ func transcribe(cfg config, events progress.Emitter) error {
 		if err := summary.CheckAvailable(); err != nil {
 			return err
 		}
+	}
+	if cfg.fromTranscript {
+		return summarizeTranscript(cfg, events)
+	}
+	if err := checkDependencies(); err != nil {
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -151,10 +157,69 @@ func transcribe(cfg config, events progress.Emitter) error {
 	return nil
 }
 
+// summarizeTranscript summarizes a transcript that already exists, skipping the
+// decode. It writes no transcript files: the input is one, and the output base
+// derived from it would name the file it was read from.
+func summarizeTranscript(cfg config, events progress.Emitter) error {
+	result, err := readTranscript(cfg.input)
+	if err != nil {
+		return err
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	events.Emit(progress.Summary(string(cfg.summaryKind)))
+	text, err := summary.Generate(ctx, result, cfg.summaryKind)
+	if err != nil {
+		return err
+	}
+
+	path := cfg.outputBase + ".summary.md"
+	if err := os.WriteFile(path, []byte(text+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	events.Emit(progress.Output("summary", path))
+	if !cfg.jsonEvents {
+		fmt.Println(path)
+	}
+	return nil
+}
+
+// readTranscript reads back a transcript this tool wrote earlier. Subtitles are
+// preferred over plain text because they still carry the segment timings, which
+// the summary prompt uses to follow the order of the conversation.
+func readTranscript(path string) (*asr.Result, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read transcript: %w", err)
+	}
+	defer f.Close()
+
+	var result *asr.Result
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".srt", ".vtt":
+		// Both are cue blocks separated by blank lines; the VTT header carries no
+		// "-->" and is skipped like a cue number.
+		result, err = format.ReadSRT(f)
+	default:
+		result, err = format.ReadText(f)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("cannot read transcript %s: %w", path, err)
+	}
+	return result, nil
+}
+
+// transcriptExtensions are the inputs that are already text. Everything else is
+// handed to ffmpeg, which is what decides whether it is media at all.
+var transcriptExtensions = map[string]bool{".txt": true, ".srt": true, ".vtt": true}
+
 func parseArgs(args []string) (config, error) {
 	fs := flag.NewFlagSet("transcribe", flag.ContinueOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: transcribe <audio-or-video-file> [flags]\n\nFlags:\n")
+		fmt.Fprintf(fs.Output(), "Usage: transcribe <audio-or-video-file> [flags]\n"+
+			"       transcribe <transcript.txt|.srt|.vtt> -summary <kind> [flags]\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -162,7 +227,7 @@ func parseArgs(args []string) (config, error) {
 	formats := fs.String("format", "txt,srt", "comma-separated output formats: txt, srt, vtt")
 	language := fs.String("lang", "auto", "ISO 639-1 language code, or \"auto\" to detect")
 	model := fs.String("model", modelstore.DefaultModel, "ggml model name")
-	summaryFlag := fs.String("summary", "none", "generate a summary from the transcript: none, resumen or minuta")
+	summaryFlag := fs.String("summary", "none", "generate a summary from the transcript: none, auto, resumen or minuta")
 	threads := fs.Int("threads", runtime.NumCPU(), "decoding threads")
 	keepWAV := fs.Bool("keep-wav", false, "keep the intermediate 16 kHz WAV file")
 	jsonEvents := fs.Bool("json", false, "report progress as one JSON object per line on stdout, for a program driving this tool")
@@ -195,16 +260,22 @@ func parseArgs(args []string) (config, error) {
 		base = outputBaseFor(input)
 	}
 
+	fromTranscript := transcriptExtensions[strings.ToLower(filepath.Ext(input))]
+	if fromTranscript && kind == summary.KindNone {
+		return config{}, errors.New("the input is already a transcript, so -summary is what this run would produce; pass one of auto, resumen or minuta")
+	}
+
 	return config{
-		input:       input,
-		outputBase:  base,
-		formats:     parsedFormats,
-		language:    *language,
-		model:       *model,
-		summaryKind: kind,
-		threads:     *threads,
-		keepWAV:     *keepWAV,
-		jsonEvents:  *jsonEvents,
+		input:          input,
+		outputBase:     base,
+		formats:        parsedFormats,
+		language:       *language,
+		model:          *model,
+		summaryKind:    kind,
+		threads:        *threads,
+		keepWAV:        *keepWAV,
+		jsonEvents:     *jsonEvents,
+		fromTranscript: fromTranscript,
 	}, nil
 }
 
