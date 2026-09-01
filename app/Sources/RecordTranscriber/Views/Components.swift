@@ -364,6 +364,38 @@ struct IconButton: View {
     }
 }
 
+/// CopyButton puts text on the pasteboard and shows that it did.
+///
+/// The acknowledgement is the point: a copy leaves the screen looking exactly as
+/// it did before, so without one the user cannot tell a press that worked from
+/// a press that missed, and presses again.
+struct CopyButton: View {
+    let text: String
+    var help = "Copiar"
+
+    /// howLongToConfirm outlasts a glance at the button without lingering long
+    /// enough to read as the control's resting state.
+    private static let howLongToConfirm = Duration.seconds(1.5)
+
+    @State private var didCopy = false
+    @State private var revert: Task<Void, Never>?
+
+    var body: some View {
+        IconButton(icon: didCopy ? "checkmark" : "doc.on.doc",
+                   help: didCopy ? "Copiado" : help) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            didCopy = true
+            revert?.cancel()
+            revert = Task {
+                try? await Task.sleep(for: Self.howLongToConfirm)
+                guard !Task.isCancelled else { return }
+                didCopy = false
+            }
+        }
+    }
+}
+
 extension View {
     /// tooltip labels an icon-only button. It replaces `.help`, whose bubble is
     /// drawn by the system in the system's appearance and after the system's

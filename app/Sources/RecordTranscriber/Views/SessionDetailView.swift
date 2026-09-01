@@ -14,6 +14,10 @@ struct SessionDetailView: View {
     @State private var tab: Tab = .summary
 
     var body: some View {
+        // Read once and hand it to both halves: the properties behind it open
+        // the file, and this view redraws on every hover.
+        let text = activeText
+
         VStack(alignment: .leading, spacing: 0) {
             header
 
@@ -23,12 +27,18 @@ struct SessionDetailView: View {
                     .padding(.bottom, Theme.Space.md)
             }
 
-            tabs
+            tabs(copyable: text)
                 .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
                 .padding(.bottom, Theme.Space.md)
 
-            content
+            content(text: text)
         }
+    }
+
+    /// activeText is what the selected tab shows, and what its copy button puts
+    /// on the pasteboard.
+    private var activeText: String? {
+        tab == .transcript ? session.transcriptText : session.summaryText
     }
 
     // MARK: Header
@@ -77,7 +87,7 @@ struct SessionDetailView: View {
 
     // MARK: Tabs
 
-    private var tabs: some View {
+    private func tabs(copyable text: String?) -> some View {
         HStack(spacing: 2) {
             ForEach(Tab.allCases) { candidate in
                 Button {
@@ -95,6 +105,12 @@ struct SessionDetailView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
+
+            // The button sits with the tabs rather than in the header because it
+            // copies the tab that is open, not the session.
+            if let text, !text.isEmpty {
+                CopyButton(text: text, help: "Copiar \(tab.rawValue.lowercased())")
+            }
         }
         .padding(3)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
@@ -105,8 +121,7 @@ struct SessionDetailView: View {
 
     // MARK: Content
 
-    @ViewBuilder private var content: some View {
-        let text = tab == .transcript ? session.transcriptText : session.summaryText
+    @ViewBuilder private func content(text: String?) -> some View {
         if let text, !text.isEmpty {
             ScrollView {
                 Group {
