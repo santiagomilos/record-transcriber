@@ -86,19 +86,21 @@ final class TranscribeRunner {
         process.standardError = diagnostics
         self.process = process
 
-        // whisper-cli writes megabytes of diagnostics; they are drained so the
-        // pipe never fills and blocks the child, and kept for the error message.
+        // Both streams are drained by their readability handlers from the moment
+        // they are opened, so the child never blocks writing into a full pipe.
+        // Only the diagnostics tail is worth keeping, which is all the buffering
+        // policy lets through.
         let stderrTail = StderrTail()
-        Task.detached {
-            for try await line in diagnostics.fileHandleForReading.bytes.lines {
-                await stderrTail.append(line)
-            }
+        let diagnosticLines = diagnostics.lines(buffering: .bufferingNewest(StderrTail.limit))
+        let eventLines = events.lines()
+        let drained = Task.detached {
+            for await line in diagnosticLines { await stderrTail.append(line) }
         }
 
         try process.run()
 
         var reportedError: String?
-        for try await line in events.fileHandleForReading.bytes.lines {
+        for await line in eventLines {
             guard let event = PipelineEvent.decode(line: line) else { continue }
             if let message = apply(event) { reportedError = message }
         }
@@ -109,6 +111,9 @@ final class TranscribeRunner {
             throw PipelineFailure(message: reportedError)
         }
         if process.terminationStatus != 0 {
+            // The child is gone, so the diagnostics stream has reached end of
+            // file; waiting for it is what makes its last lines part of the tail.
+            await drained.value
             let tail = await stderrTail.text()
             throw PipelineFailure(message: tail.isEmpty
                 ? "transcribe exited with status \(process.terminationStatus)."
@@ -172,12 +177,15 @@ struct PipelineFailure: LocalizedError {
 /// StderrTail keeps the last few diagnostic lines, which is all that is useful
 /// when a tool fails and all that should be shown in a dialog.
 private actor StderrTail {
+    /// limit is also what the diagnostics stream buffers, so a slow consumer
+    /// drops exactly the lines this would have discarded anyway.
+    static let limit = 12
+
     private var lines: [String] = []
-    private let limit = 12
 
     func append(_ line: String) {
         lines.append(line)
-        if lines.count > limit { lines.removeFirst(lines.count - limit) }
+        if lines.count > Self.limit { lines.removeFirst(lines.count - Self.limit) }
     }
 
     func text() -> String {
