@@ -11,19 +11,23 @@
 
 Verified end to end on a 16-minute Spanish recording: transcript plus minutes in 1m43s, language detected as `es`, 167 segments.
 
-## Phase 2: Recording and a graphical app
+## Phase 2: Recording and a graphical app — shipped
 
-The CLI covers everything after a recording exists. It does not cover making one, and that gap is why recordings arrive as 750 MB screen captures of a black window. Recording is also the one part of this workflow a command line serves badly: it is live and stateful, so the user needs to see that capture is running and at what level, and needs to start and stop it without typing.
+`Record Transcriber.app` covers the whole arc: start and stop a meeting recording from the menu bar capturing microphone plus system audio, transcribe, summarize. The existing pipeline runs underneath unchanged — the app spawns the same `transcribe` binary the command line uses, embedded in its bundle.
 
-The goal is a single macOS app covering the whole arc — start and stop a meeting recording capturing microphone plus system audio, transcribe, summarize — with the existing pipeline underneath.
+Both open decisions were settled during the spec (`agent-os/specs/2026-09-01-0255-macos-recording-app/`).
 
-Two decisions to settle before building; both are open.
+**Shell: a native SwiftUI app driving the Go binary.** Core Audio process taps are an Objective-C and Swift API, so Swift entered the project whichever shell was chosen. Wails would have meant Go for the UI, Swift for the capture helper, and Node plus WebKit plus cgo added to a project whose stated identity is "standard library only" — three worlds where two suffice.
 
-**Shell: Go plus Wails, or a native SwiftUI app that drives the Go binary.** Wails reuses the current code in one codebase and one language, at the cost of a shallower fit with macOS conventions (menu bar, permissions, shortcuts). A native app fits macOS properly and reaches Core Audio directly, at the cost of splitting the project across two languages.
+**System audio: Core Audio process taps, not BlackHole.** No virtual driver to install. The microphone and the tap go into one aggregate device so Core Audio owns the clock synchronization between them rather than the app reconciling two clocks that drift apart over a meeting.
 
-**System audio capture.** The current path depends on BlackHole, a virtual audio driver that is reported unreliable on macOS 26 Tahoe and is a legacy approach. The modern replacement is Core Audio process taps, native since macOS 14.4 and needing no virtual device, but the API is Objective-C and Swift. A helper binary written in Swift that captures through a process tap and writes raw PCM to stdout would keep the subprocess architecture intact and avoid cgo entirely, the same way ffmpeg and whisper-cli are already driven.
+Proven before the UI was written, on macOS 26.6.2 with an ad-hoc signed bundle: 15.0 s captured to the sample, system audio at −8.4 dB and microphone at −30.0 dB in the same stream. The one trap is that a bundled executable without an `NSApplication` is never issued the permission prompts at all — see `spike-result.md` in the spec folder.
 
-**Recording format.** Measured on this project: Opus at 32 kbps mono costs 14 MB per hour against the 2.78 GB per hour of the current OBS capture, and the meeting minutes generated from it are equivalent to those from the uncompressed original. Mono measured better than stereo at the same bitrate, and doubling the bitrate to 64 kbps changed the transcript by less than one point. Record mono, and do not spend bits above 32 kbps.
+**Recording format.** Measured on this project: Opus at 32 kbps mono costs 14 MB per hour against the 2.78 GB per hour of the OBS capture it replaces, and the meeting minutes generated from it are equivalent to those from the uncompressed original. Mono measured better than stereo at the same bitrate, and doubling the bitrate to 64 kbps changed the transcript by less than one point. The app records mono and spends no bits above 32 kbps.
+
+The CLI gained a `-json` flag along the way, reporting a run as one JSON event per line so the app can show real progress. Without the flag its output is unchanged.
+
+Not done, and deliberately: notarized distribution to other machines. The app is ad-hoc signed for personal use, which costs nothing and needs no Apple Developer Program.
 
 ## Phase 3: Later
 

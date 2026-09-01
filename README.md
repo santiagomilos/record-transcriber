@@ -1,20 +1,51 @@
 # record-transcriber
 
-Turns an audio or video recording into text, locally. The audio never leaves the
-machine and there is no per-hour cost.
+Records a meeting, turns it into text, and summarizes it — locally. The audio
+never leaves the machine and there is no per-hour cost.
+
+There are two ways in: a macOS app that records and then runs the pipeline, and
+the command-line tool it drives, for recordings that already exist.
 
 ## Install
 
 ```sh
 brew install ffmpeg whisper-cpp
-go build -o bin/transcribe ./cmd/transcribe
+make            # builds bin/transcribe and "bin/Record Transcriber.app"
 ```
 
 Models are downloaded on first run into `~/Library/Caches/record-transcriber/models/`
 on macOS (`~/.cache/...` on Linux): the transcription model, `large-v3-turbo` at
 1.6 GB, plus a small Silero voice-activity model used to skip silence.
 
-## Use
+## The app
+
+```sh
+make run
+```
+
+A menu bar item starts and stops the recording, with a level meter for the
+microphone and for the system audio separately — the usual failure is capturing
+only your own voice, and one mixed bar hides it. Stopping transcribes the
+recording and generates its minutes without another click.
+
+Recordings land in `~/Documents/Grabaciones/<date time>/` as plain files
+(`audio.opus`, `transcript.txt`, `transcript.srt`, `transcript.summary.md`), one
+folder per session, changeable in preferences. The folder is the only state the
+app keeps, so a session can be moved, copied or deleted from the Finder.
+
+The window lists those sessions and shows what each produced. Dragging an
+existing audio or video file onto it runs that file through the same pipeline.
+
+System audio is captured with a Core Audio process tap, native since macOS 14.4,
+so there is no virtual audio driver to install. Audio is written as Opus at
+32 kbps mono: 14 MB per hour, measured to produce minutes equivalent to the
+uncompressed original.
+
+macOS asks for microphone access on the first recording. The app is signed
+ad-hoc because this project has no signing identity, and the signature changes
+whenever it is rebuilt, so `make app` may make macOS ask again.
+
+## Use the CLI
 
 ```sh
 # transcript as .txt and .srt next to the input file
@@ -36,6 +67,19 @@ transcribe --summary minuta reunion.mp4
 | `-summary` | `none` | `none`, `resumen`, or `minuta` |
 | `-threads` | number of CPUs | decoding threads |
 | `-keep-wav` | off | keep the intermediate 16 kHz WAV |
+| `-json` | off | report progress as one JSON object per line on stdout |
+
+`-json` is what the app reads. Without it, stdout carries the bare output paths
+and stderr the human narration, exactly as before:
+
+```sh
+transcribe -json reunion.opus
+{"event":"input","name":"reunion.opus","duration_ms":963000}
+{"event":"stage","stage":"transcribe"}
+{"event":"progress","percent":37}
+{"event":"transcript","language":"es","segments":167,"elapsed_ms":103000}
+{"event":"output","kind":"txt","path":"/…/reunion.txt"}
+```
 
 `--summary` drives the `claude` CLI, so it needs Claude Code installed and
 signed in — no API key. Its presence is checked before transcription starts, so
@@ -49,7 +93,10 @@ rendered as text or subtitles. `--summary` pipes the transcript into `claude
 --print`.
 
 Every stage is an external binary, so the Go module itself has no dependencies
-outside the standard library.
+outside the standard library. The app follows the same rule: it uses only
+system frameworks, spawns `ffmpeg` to encode, and spawns the `transcribe` binary
+embedded in its bundle to do everything after the recording exists. The two
+front ends therefore cannot drift apart — there is one pipeline.
 
 Transcription sits behind the `asr.Transcriber` interface, so an in-process cgo
 backend or a cloud backend can replace the subprocess without touching the rest
@@ -58,8 +105,20 @@ of the pipeline.
 ## Test
 
 ```sh
-go test ./...
+make test
 ```
 
-The tests cover the whisper JSON parser, the three output formats, and argument
-parsing. None of them need ffmpeg, whisper-cli, a model, or the network.
+Go covers the whisper JSON parser, the three output formats, argument parsing,
+the progress-line parser and both event emitters. Swift covers the event decoder
+on the other side of that boundary, session naming and listing, and the mapping
+from preferences to CLI flags. None of them need ffmpeg, whisper-cli, a model,
+audio hardware, or the network.
+
+`make test-swift` passes extra flags because swift-testing ships inside the
+Command Line Tools but is not on the default search paths. With Xcode installed
+they would be unnecessary.
+
+`app/spike/` is the standalone program that proved process taps work here before
+the app was written. It stays as a diagnostic: if a macOS update breaks system
+audio capture, `sh app/spike/build.sh && open bin/AudioSpike.app` answers whether
+the problem is Core Audio or this app.
