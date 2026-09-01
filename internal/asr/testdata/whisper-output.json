@@ -1,0 +1,32 @@
+{
+  "systeminfo": "AVX = 0 | NEON = 1 | METAL = 1",
+  "model": {
+    "type": "large",
+    "multilingual": true
+  },
+  "params": {
+    "model": "models/ggml-large-v3-turbo.bin",
+    "language": "auto",
+    "translate": false
+  },
+  "result": {
+    "language": "es"
+  },
+  "transcription": [
+    {
+      "timestamps": { "from": "00:00:00,000", "to": "00:00:04,120" },
+      "offsets": { "from": 0, "to": 4120 },
+      "text": " Buenos días a todos."
+    },
+    {
+      "timestamps": { "from": "00:00:59,500", "to": "00:01:03,000" },
+      "offsets": { "from": 59500, "to": 63000 },
+      "text": " Pasemos al segundo punto."
+    },
+    {
+      "timestamps": { "from": "01:02:00,000", "to": "01:02:00,900" },
+      "offsets": { "from": 3720000, "to": 3720900 },
+      "text": " Gracias, nos vemos."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+bin/
+.idea/
+.DS_Store
+
+# Recordings fed to the tool.
+*.mp4
+*.mov
+*.mkv
+*.m4a
+*.mp3
+*.opus
+*.aiff
+*.wav
+
+# Transcripts and summaries the tool produces next to its input. These carry
+# whatever was said in the recording, so they never belong in the repo.
+*.txt
+*.srt
+*.vtt
+*.summary.md
