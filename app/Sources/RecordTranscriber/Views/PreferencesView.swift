@@ -82,9 +82,9 @@ struct PreferencesView: View {
 
             SettingRow(label: "Resumen") {
                 Picker("", selection: $preferences.summaryKind) {
-                    Text("Ninguno").tag("none")
-                    Text("Resumen").tag("resumen")
-                    Text("Minuta").tag("minuta")
+                    ForEach(Preferences.summaryKinds, id: \.self) { kind in
+                        Text(Preferences.summaryKindName(kind)).tag(kind)
+                    }
                 }
                 .labelsHidden()
                 .fixedSize()

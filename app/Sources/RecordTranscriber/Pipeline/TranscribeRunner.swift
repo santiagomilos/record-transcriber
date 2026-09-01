@@ -23,7 +23,7 @@ final class TranscribeRunner {
             case let .downloadingModel(name, _): return "Descargando modelo \(name)"
             case .extracting: return "Extrayendo audio"
             case .transcribing: return "Transcribiendo"
-            case let .summarizing(kind): return "Generando \(kind)"
+            case let .summarizing(kind): return "Generando \(Preferences.summaryKindProgressLabel(kind))"
             }
         }
 
