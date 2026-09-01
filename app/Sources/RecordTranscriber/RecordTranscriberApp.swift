@@ -8,25 +8,38 @@ struct RecordTranscriberApp: App {
         MenuBarExtra {
             MenuBarView(model: model)
         } label: {
-            // The icon carries the state, so a recording that is still running
-            // is visible without opening anything.
-            Image(systemName: menuBarSymbol)
+            MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.window)
 
         Window("Grabaciones", id: LibraryWindow.id) {
             LibraryView(model: model)
-                .frame(minWidth: 720, minHeight: 440)
-        }
-
-        Settings {
-            PreferencesView(model: model)
+                .frame(minWidth: 760, minHeight: 460)
+                .environment(\.colorScheme, .dark)
         }
     }
+}
 
-    private var menuBarSymbol: String {
-        if model.recorder.isRecording { return "record.circle.fill" }
-        if model.runner.isRunning { return "waveform.badge.gearshape" }
-        return "waveform"
+/// MenuBarLabel is what the status item shows. The icon carries the state, so a
+/// recording that is still running is visible without opening anything — and
+/// while it runs the elapsed time is spelled out beside it, which is the one
+/// thing worth reading at a glance.
+struct MenuBarLabel: View {
+    let model: AppModel
+
+    var body: some View {
+        if model.recorder.isRecording {
+            Label {
+                Text(formatDuration(model.recorder.elapsed))
+            } icon: {
+                Image(systemName: "record.circle.fill")
+                    .symbolEffect(.pulse, options: .repeating)
+            }
+        } else if model.runner.isRunning {
+            Image(systemName: "waveform.badge.gearshape")
+                .symbolEffect(.variableColor.iterative, options: .repeating)
+        } else {
+            Image(systemName: "waveform")
+        }
     }
 }

@@ -1,117 +1,229 @@
 import SwiftUI
 
 /// MenuBarView is the control that is reachable while another app is in the
-/// foreground, which is where recording actually starts and stops.
+/// foreground, which is where recording actually starts and stops. It is also
+/// the only place Preferences can be opened from, since the app has no menu bar
+/// of its own.
 struct MenuBarView: View {
+    /// recentCount is how many recordings the panel lists before deferring to
+    /// the window. Five keeps the panel one screen tall.
+    private static let recentCount = 5
+
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
 
+    /// Preferences replace the panel's content instead of opening a window of
+    /// their own: a menu bar app that throws a separate window at you for four
+    /// settings has left the menu bar.
+    @State private var showingPreferences = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        Group {
+            if showingPreferences {
+                PreferencesView(model: model) { showingPreferences = false }
+            } else {
+                home
+            }
+        }
+        .padding(Theme.panelPadding)
+        .frame(width: Theme.panelWidth)
+        .background(Theme.panelGradient)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var home: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            header
+                // The header's tooltips hang below it, over the card that
+                // follows, which draws later in the stack unless lifted.
+                .zIndex(1)
+            state
+
             // The window carries the same message in an alert, but it is often
             // closed while recording, and a failure nobody sees is a failure
             // that looks like nothing happening at all.
             if let failure = model.failure {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(failure, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
+                Banner(icon: "exclamationmark.triangle.fill", message: failure) {
                     Button("Descartar") { model.failure = nil }
-                        .buttonStyle(.link)
-                        .font(.caption)
+                        .buttonStyle(.plain)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.accent)
                 }
-                Divider()
-            }
-
-            header
-
-            if model.recorder.isRecording {
-                LevelMeter(levels: model.recorder.levels)
-            }
-
-            if model.runner.isRunning {
-                ProgressView(value: model.runner.phase.fraction) {
-                    Text(model.runner.phase.label).font(.caption)
-                }
-                .progressViewStyle(.linear)
             }
 
             if !model.missingTools.filter(\.required).isEmpty {
-                Text("Faltan dependencias — abre la ventana para verlas")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                Banner(icon: "shippingbox.fill", message: "Faltan dependencias para transcribir.") {
+                    Button("Ver cuáles") { openLibrary() }
+                        .buttonStyle(.plain)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.accent)
+                }
             }
 
-            Divider()
-
-            Button("Abrir grabaciones") { openWindow(id: LibraryWindow.id) }
-                .keyboardShortcut("o")
-            Button("Salir") { NSApplication.shared.terminate(nil) }
-                .keyboardShortcut("q")
+            recents
+            footer
         }
-        .padding(12)
-        .frame(width: 260)
     }
 
-    @ViewBuilder private var header: some View {
-        if model.recorder.isRecording {
-            Button {
-                Task { await model.stopRecording() }
-            } label: {
-                Label("Detener  \(formatDuration(model.recorder.elapsed))", systemImage: "stop.fill")
-            }
-            .keyboardShortcut("r")
+    // MARK: Header
 
-            Button("Descartar grabación", role: .destructive) { model.cancelRecording() }
-                .font(.caption)
-        } else {
-            Button {
-                Task { await model.startRecording() }
-            } label: {
-                Label("Grabar", systemImage: "record.circle")
+    private var header: some View {
+        HStack(spacing: Theme.Space.md) {
+            BrandMark()
+            Text("Record Transcriber")
+                .font(Theme.titleFont)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            IconButton(icon: "gearshape", help: "Preferencias") {
+                showingPreferences = true
             }
-            .keyboardShortcut("r")
-            .disabled(model.isBusy)
+            .keyboardShortcut(",")
+
+            IconButton(icon: "power", help: "Salir") {
+                NSApplication.shared.terminate(nil)
+            }
+            .keyboardShortcut("q")
         }
+        .padding(.horizontal, Theme.Space.xs)
+    }
+
+    // MARK: State card
+
+    @ViewBuilder private var state: some View {
+        if model.recorder.isRecording {
+            PanelCard(padding: Theme.Space.md) {
+                HStack(spacing: Theme.Space.md) {
+                    Circle()
+                        .fill(Theme.recording)
+                        .frame(width: 9, height: 9)
+                        .symbolEffectFallbackPulse()
+                    Text("Grabando")
+                        .font(Theme.rowTitleFont)
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Text(formatDuration(model.recorder.elapsed))
+                        .font(Theme.timerFont)
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .padding(.bottom, Theme.Space.xs)
+
+                LevelMeter(levels: model.recorder.levels)
+                    .padding(.bottom, Theme.Space.sm)
+
+                HStack(spacing: Theme.Space.sm) {
+                    Button("Detener") { Task { await model.stopRecording() } }
+                        .buttonStyle(FilledButtonStyle(tint: Theme.recording))
+                        .keyboardShortcut("r")
+                    Button("Descartar") { model.cancelRecording() }
+                        .buttonStyle(FilledButtonStyle(tint: Theme.textSecondary, isProminent: false))
+                }
+            }
+        } else if model.runner.isRunning {
+            PanelCard(padding: Theme.Space.md) {
+                PhaseProgress(phase: model.runner.phase)
+            }
+        } else {
+            PanelCard(padding: Theme.Space.xs) {
+                PanelRow(icon: "record.circle",
+                         title: "Grabar",
+                         subtitle: "Micrófono + sistema",
+                         iconColor: Theme.recording,
+                         isEnabled: !model.isBusy) {
+                    Task { await model.startRecording() }
+                } trailing: {
+                    Text("⌘R")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .keyboardShortcut("r")
+            }
+        }
+    }
+
+    // MARK: Recent recordings
+
+    private var recents: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            SectionLabel(text: "Recientes")
+                .padding(.horizontal, Theme.Space.xs)
+
+            PanelCard(padding: Theme.Space.xs) {
+                if model.library.sessions.isEmpty {
+                    Text("Todavía no hay grabaciones.")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, Theme.rowPadding)
+                        .padding(.vertical, Theme.Space.sm)
+                } else {
+                    ForEach(model.library.sessions.prefix(Self.recentCount)) { session in
+                        PanelRow(icon: "waveform",
+                                 title: session.displayName,
+                                 subtitle: subtitle(for: session)) {
+                            openLibrary(selecting: session)
+                        } trailing: {
+                            StatusBadge(status: session.status)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// subtitle is the second line of a recording row: its length, and the
+    /// language once the pipeline has detected one. A session recorded before
+    /// the metadata sidecar existed has neither, and shows nothing.
+    private func subtitle(for session: Session) -> String? {
+        guard let metadata = session.metadata else { return nil }
+        var parts: [String] = []
+        if metadata.durationSeconds > 0 { parts.append(formatDuration(metadata.durationSeconds)) }
+        if let language = metadata.language, !language.isEmpty { parts.append(language) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: Footer
+
+    private var footer: some View {
+        PanelRow(icon: "rectangle.stack",
+                 title: "Abrir biblioteca") {
+            openLibrary()
+        } trailing: {
+            Text("⌘O")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .keyboardShortcut("o")
+    }
+
+    /// openLibrary brings the window to the front. An accessory app is never
+    /// activated on its own, so without the explicit activation the window opens
+    /// behind whatever the user was looking at.
+    private func openLibrary(selecting session: Session? = nil) {
+        if let session { model.selection = session.id }
+        activate()
+        openWindow(id: LibraryWindow.id)
+    }
+
+    private func activate() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }
 
-/// LevelMeter shows both sources separately. Two bars rather than one is
-/// deliberate: the common failure is capturing only your own voice, and a single
-/// mixed bar hides it.
-struct LevelMeter: View {
-    let levels: AudioCapture.Levels
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            bar(label: "Micrófono", level: levels.microphone)
-            bar(label: "Sistema", level: levels.system)
-        }
+private extension View {
+    /// symbolEffectFallbackPulse animates the recording dot. It is a plain
+    /// opacity animation rather than `.symbolEffect` because the dot is a shape,
+    /// not a symbol.
+    func symbolEffectFallbackPulse() -> some View {
+        modifier(PulseModifier())
     }
+}
 
-    private func bar(label: String, level: Float) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(.caption2)
-                .frame(width: 62, alignment: .leading)
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.quaternary)
-                    Capsule()
-                        .fill(level > 0.001 ? Color.accentColor : Color.secondary)
-                        .frame(width: geometry.size.width * CGFloat(displayLevel(level)))
-                }
-            }
-            .frame(height: 6)
-        }
-    }
+private struct PulseModifier: ViewModifier {
+    @State private var dimmed = false
 
-    /// displayLevel maps the peak onto a decibel-ish curve, because a linear bar
-    /// spends most of its length on levels nobody records at.
-    private func displayLevel(_ level: Float) -> Float {
-        guard level > 0.0001 else { return 0 }
-        let decibels = 20 * log10(level)
-        return min(1, max(0, (decibels + 60) / 60))
+    func body(content: Content) -> some View {
+        content
+            .opacity(dimmed ? 0.35 : 1)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dimmed)
+            .onAppear { dimmed = true }
     }
 }
