@@ -1,0 +1,168 @@
+import Foundation
+import Observation
+
+/// TranscribeRunner drives the `transcribe` binary and turns its NDJSON event
+/// stream into something the UI can show.
+///
+/// The binary is the one shipped inside the app bundle, so the app and the
+/// command line always run the same pipeline.
+@MainActor
+@Observable
+final class TranscribeRunner {
+    enum Phase: Equatable {
+        case idle
+        case downloadingModel(name: String, fraction: Double?)
+        case extracting
+        case transcribing(percent: Int)
+        case summarizing(kind: String)
+
+        /// label is what the UI shows next to the progress indicator.
+        var label: String {
+            switch self {
+            case .idle: return ""
+            case let .downloadingModel(name, _): return "Descargando modelo \(name)"
+            case .extracting: return "Extrayendo audio"
+            case .transcribing: return "Transcribiendo"
+            case let .summarizing(kind): return "Generando \(kind)"
+            }
+        }
+
+        /// fraction is nil when the phase cannot report how far along it is,
+        /// which is what tells a progress bar to stay indeterminate.
+        var fraction: Double? {
+            switch self {
+            case let .downloadingModel(_, fraction): return fraction
+            case let .transcribing(percent): return Double(percent) / 100
+            default: return nil
+            }
+        }
+    }
+
+    private(set) var phase: Phase = .idle
+    private(set) var isRunning = false
+    /// outputs maps a kind ("txt", "srt", "vtt", "summary") to the file written.
+    private(set) var outputs: [String: URL] = [:]
+
+    @ObservationIgnored private var process: Process?
+
+    /// run transcribes input, writing its outputs alongside outputBase, and
+    /// returns when the binary exits. It throws when the run fails, carrying the
+    /// message the pipeline reported rather than an exit status.
+    func run(input: URL, outputBase: URL, preferences: Preferences) async throws {
+        guard !isRunning else { return }
+        guard let binary = TranscribeRunner.binary() else {
+            throw RecordingError.missingTool("transcribe")
+        }
+
+        isRunning = true
+        outputs = [:]
+        phase = .extracting
+        defer {
+            isRunning = false
+            phase = .idle
+            process = nil
+        }
+
+        let events = Pipe()
+        let diagnostics = Pipe()
+        let process = Process()
+        process.executableURL = binary
+        process.environment = ToolPaths.childEnvironment
+        process.arguments = preferences.transcribeArguments(input: input, outputBase: outputBase)
+        process.standardOutput = events
+        process.standardError = diagnostics
+        self.process = process
+
+        // whisper-cli writes megabytes of diagnostics; they are drained so the
+        // pipe never fills and blocks the child, and kept for the error message.
+        let stderrTail = StderrTail()
+        Task.detached {
+            for try await line in diagnostics.fileHandleForReading.bytes.lines {
+                await stderrTail.append(line)
+            }
+        }
+
+        try process.run()
+
+        var reportedError: String?
+        for try await line in events.fileHandleForReading.bytes.lines {
+            guard let event = PipelineEvent.decode(line: line) else { continue }
+            if let message = apply(event) { reportedError = message }
+        }
+
+        process.waitUntilExit()
+
+        if let reportedError {
+            throw PipelineFailure(message: reportedError)
+        }
+        if process.terminationStatus != 0 {
+            let tail = await stderrTail.text()
+            throw PipelineFailure(message: tail.isEmpty
+                ? "transcribe exited with status \(process.terminationStatus)."
+                : tail)
+        }
+    }
+
+    /// cancel asks the binary to stop. The Go side listens for SIGTERM and
+    /// cleans up its intermediate WAV, so this leaves nothing behind.
+    func cancel() {
+        process?.terminate()
+    }
+
+    /// apply folds one event into the published state, returning the message of
+    /// an error event.
+    private func apply(_ event: PipelineEvent) -> String? {
+        switch event.event {
+        case .model:
+            phase = .downloadingModel(name: event.name ?? "", fraction: event.fractionDownloaded)
+        case .stage:
+            switch event.stage {
+            case .extract: phase = .extracting
+            case .transcribe: phase = .transcribing(percent: 0)
+            case .summary: phase = .summarizing(kind: event.name ?? "resumen")
+            default: break
+            }
+        case .progress:
+            phase = .transcribing(percent: event.percent)
+        case .output:
+            if let kind = event.kind, let path = event.path {
+                outputs[kind] = URL(fileURLWithPath: path)
+            }
+        case .error:
+            return event.message
+        default:
+            break
+        }
+        return nil
+    }
+
+    /// binary prefers the copy inside the app bundle and falls back to one on
+    /// PATH, which is what makes `swift run` usable during development.
+    private static func binary() -> URL? {
+        if let bundled = ToolPaths.transcribe { return bundled }
+        return ToolPaths.locate("transcribe").map(URL.init(fileURLWithPath:))
+    }
+}
+
+/// PipelineFailure carries the message the pipeline itself reported, which is
+/// written for a person to read.
+struct PipelineFailure: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
+/// StderrTail keeps the last few diagnostic lines, which is all that is useful
+/// when a tool fails and all that should be shown in a dialog.
+private actor StderrTail {
+    private var lines: [String] = []
+    private let limit = 12
+
+    func append(_ line: String) {
+        lines.append(line)
+        if lines.count > limit { lines.removeFirst(lines.count - limit) }
+    }
+
+    func text() -> String {
+        lines.joined(separator: "\n")
+    }
+}
