@@ -109,11 +109,19 @@ func transcribe(cfg config, events progress.Emitter) error {
 	events.Emit(progress.Stage(progress.StageTranscribe))
 	started := time.Now()
 
-	transcriber := &asr.WhisperCLI{Stderr: os.Stderr}
+	transcriber := &asr.WhisperCLI{}
 	if cfg.jsonEvents {
+		// A program driving the tool reads the run through the event stream, so
+		// whisper-cli's own narration is dropped rather than forwarded: its
+		// segments run to megabytes for a long recording, and filling a pipe the
+		// caller does not drain stalls the decode until it does.
+		//
 		// Only in JSON mode: --print-progress would otherwise add lines to the
 		// output a terminal user sees today.
 		transcriber.Progress = func(percent int) { events.Emit(progress.Progress(percent)) }
+	} else {
+		// A terminal user watches the transcript appear as it is decoded.
+		transcriber.Stdout, transcriber.Stderr = os.Stderr, os.Stderr
 	}
 	result, err := transcriber.Transcribe(ctx, wavPath, asr.Options{
 		Language:     cfg.language,

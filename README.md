@@ -87,8 +87,11 @@ transcribe -summary auto reunion.srt
 | `-keep-wav` | off | keep the intermediate 16 kHz WAV |
 | `-json` | off | report progress as one JSON object per line on stdout |
 
-`-json` is what the app reads. Without it, stdout carries the bare output paths
-and stderr the human narration, exactly as before:
+`-json` is what the app reads. It also silences whisper-cli's own narration,
+which a caller reading the event stream has no use for and which runs to
+megabytes of decoded segments for a long recording. Without `-json`, stdout
+carries the bare output paths and stderr the human narration, whisper-cli's
+included, exactly as before:
 
 ```sh
 transcribe -json reunion.opus

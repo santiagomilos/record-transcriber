@@ -22,7 +22,13 @@ const BinaryName = "whisper-cli"
 type WhisperCLI struct {
 	// Binary is the executable to run; empty means BinaryName from $PATH.
 	Binary string
-	// Stderr, when set, receives whisper-cli's progress output.
+	// Stdout, when set, receives the segments whisper-cli prints as it decodes
+	// them. Leaving it nil discards them: they run to megabytes for a long
+	// recording, and the transcript itself arrives through --output-json.
+	Stdout io.Writer
+	// Stderr, when set, receives whisper-cli's diagnostics, which is also where
+	// it writes its progress reports. The tail of them is kept for the error
+	// message whether or not this is set.
 	Stderr io.Writer
 	// Progress, when set, is called with the decoding percentage as whisper-cli
 	// reports it. Setting it also turns on --print-progress, so leaving it nil
@@ -81,21 +87,21 @@ func (w *WhisperCLI) Transcribe(ctx context.Context, wavPath string, opts Option
 		bin = BinaryName
 	}
 
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, args...)
+	// The tail is captured whichever way the caller wants the stream routed: it
+	// is what says why a run failed, and a caller forwarding the stream
+	// elsewhere has no way to hand it back here.
+	var tail tailBuffer
+	var diagnostics io.Writer = &tail
 	if w.Stderr != nil {
-		// whisper-cli prints each segment to stdout as it decodes; routing it
-		// here surfaces progress without polluting our own stdout, which
-		// carries the output paths for callers that pipe them.
-		out := w.watchProgress(w.Stderr)
-		cmd.Stdout = out
-		cmd.Stderr = out
-	} else {
-		cmd.Stderr = w.watchProgress(&stderr)
+		diagnostics = io.MultiWriter(&tail, w.Stderr)
 	}
 
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Stdout = w.Stdout
+	cmd.Stderr = w.watchProgress(diagnostics)
+
 	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+		if msg := strings.TrimSpace(tail.String()); msg != "" {
 			return nil, fmt.Errorf("asr: %s failed: %w: %s", bin, err, msg)
 		}
 		return nil, fmt.Errorf("asr: %s failed: %w", bin, err)
@@ -118,8 +124,9 @@ func (w *WhisperCLI) watchProgress(out io.Writer) io.Writer {
 }
 
 // progressScanner forwards every byte written to it while pulling whisper-cli's
-// progress reports out of the stream. It cannot separate them by stream instead:
-// whisper-cli interleaves progress with the segments it has decoded.
+// progress reports out of the stream. whisper-cli writes them to stderr among
+// the rest of its diagnostics rather than on a stream of their own, so they are
+// recognised by their prefix.
 type progressScanner struct {
 	out     io.Writer
 	report  func(percent int)
@@ -162,6 +169,29 @@ func parseProgressLine(line string) int {
 	}
 	return percent
 }
+
+// maxTailBytes bounds what tailBuffer keeps. whisper-cli opens with a hundred
+// or so lines of model and system detail, and only the end of the stream says
+// why a run failed.
+const maxTailBytes = 8 << 10
+
+// tailBuffer keeps the last maxTailBytes bytes written to it and drops the rest,
+// so a subprocess that narrates for an hour still costs a fixed amount of memory.
+type tailBuffer struct {
+	buf []byte
+}
+
+func (t *tailBuffer) Write(b []byte) (int, error) {
+	t.buf = append(t.buf, b...)
+	if extra := len(t.buf) - maxTailBytes; extra > 0 {
+		t.buf = append(t.buf[:0], t.buf[extra:]...)
+	}
+	// io.MultiWriter treats a short count as an error, so the report is of what
+	// the caller wrote rather than of what was kept.
+	return len(b), nil
+}
+
+func (t *tailBuffer) String() string { return string(t.buf) }
 
 // whisperJSON mirrors the subset of whisper.cpp's --output-json document that
 // we consume. Timestamps are read from offsets (milliseconds) rather than the

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -167,6 +168,47 @@ func TestProgressScannerReportsEveryProgressLineAndForwardsTheStreamUnchanged(t 
 	}
 	if forwarded.String() != stream {
 		t.Errorf("forwarded %q, want %q", forwarded.String(), stream)
+	}
+}
+
+func TestTailBufferKeepsEverythingBelowTheLimit(t *testing.T) {
+	var tail tailBuffer
+	tail.Write([]byte("whisper_init_from_file_with_params_no_state: loading model\n"))
+	tail.Write([]byte("error: failed to load model\n"))
+
+	want := "whisper_init_from_file_with_params_no_state: loading model\nerror: failed to load model\n"
+	if got := tail.String(); got != want {
+		t.Errorf("tail = %q, want %q", got, want)
+	}
+}
+
+func TestTailBufferKeepsTheEndOfAnOversizedStream(t *testing.T) {
+	var tail tailBuffer
+	tail.Write(bytes.Repeat([]byte("x"), maxTailBytes))
+	tail.Write([]byte("error: failed to load model\n"))
+
+	got := tail.String()
+	if len(got) != maxTailBytes {
+		t.Fatalf("kept %d bytes, want %d", len(got), maxTailBytes)
+	}
+	if !strings.HasSuffix(got, "error: failed to load model\n") {
+		t.Errorf("tail does not end with the last line written; it ends with %q", got[len(got)-40:])
+	}
+}
+
+func TestTailBufferReportsEveryByteWritten(t *testing.T) {
+	var tail tailBuffer
+	written := maxTailBytes + 100
+
+	n, err := tail.Write(bytes.Repeat([]byte("y"), written))
+
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+	// io.MultiWriter turns a short count into io.ErrShortWrite, which would fail
+	// the run over diagnostics that were merely too long to keep.
+	if n != written {
+		t.Errorf("Write reported %d, want %d", n, written)
 	}
 }
 
