@@ -20,6 +20,11 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.4</string>
+	<!-- The app lives in the menu bar: no Dock icon, no ⌘Tab entry. The cost is
+	     that it is never brought to the front on its own, so anything that opens
+	     a window activates the app explicitly. -->
+	<key>LSUIElement</key>
+	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
