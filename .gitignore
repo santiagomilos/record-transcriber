@@ -18,3 +18,4 @@ bin/
 *.srt
 *.vtt
 *.summary.md
+app/.build/
