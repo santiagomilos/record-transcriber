@@ -1,6 +1,7 @@
 package asr
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -103,5 +104,89 @@ func TestResultTextWithNoSegmentsIsEmpty(t *testing.T) {
 	r := &Result{}
 	if got := r.Text(); got != "" {
 		t.Errorf("Text() = %q, want empty", got)
+	}
+}
+
+func TestParseProgressLineReadsThePercentage(t *testing.T) {
+	got := parseProgressLine("whisper_print_progress_callback: progress =  35%")
+	if got != 35 {
+		t.Errorf("got %d, want 35", got)
+	}
+}
+
+func TestParseProgressLineReadsZeroAndOneHundred(t *testing.T) {
+	if got := parseProgressLine("whisper_print_progress_callback: progress = 0%"); got != 0 {
+		t.Errorf("got %d, want 0", got)
+	}
+	if got := parseProgressLine("whisper_print_progress_callback: progress = 100%"); got != 100 {
+		t.Errorf("got %d, want 100", got)
+	}
+}
+
+func TestParseProgressLineRejectsLinesThatAreNotProgress(t *testing.T) {
+	lines := []string{
+		"",
+		"[00:00:00.000 --> 00:00:04.120]   Buenos días a todos.",
+		"whisper_print_progress_callback: progress = ",
+		"whisper_print_progress_callback: progress = abc%",
+		"whisper_print_progress_callback: progress = 35",
+		"whisper_print_progress_callback: progress = 101%",
+		"whisper_print_progress_callback: progress = -5%",
+	}
+	for _, line := range lines {
+		if got := parseProgressLine(line); got != -1 {
+			t.Errorf("parseProgressLine(%q) = %d, want -1", line, got)
+		}
+	}
+}
+
+func TestProgressScannerReportsEveryProgressLineAndForwardsTheStreamUnchanged(t *testing.T) {
+	var forwarded bytes.Buffer
+	var reported []int
+	scanner := &progressScanner{
+		out:    &forwarded,
+		report: func(percent int) { reported = append(reported, percent) },
+	}
+
+	stream := "whisper_print_progress_callback: progress =  10%\n" +
+		"[00:00:00.000 --> 00:00:04.120]   Buenos días a todos.\n" +
+		"whisper_print_progress_callback: progress =  50%\n" +
+		"whisper_print_progress_callback: progress = 100%\n"
+	if _, err := scanner.Write([]byte(stream)); err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	want := []int{10, 50, 100}
+	if len(reported) != len(want) {
+		t.Fatalf("got %v, want %v", reported, want)
+	}
+	for i, percent := range want {
+		if reported[i] != percent {
+			t.Errorf("report %d = %d, want %d", i, reported[i], percent)
+		}
+	}
+	if forwarded.String() != stream {
+		t.Errorf("forwarded %q, want %q", forwarded.String(), stream)
+	}
+}
+
+func TestProgressScannerHandlesALineSplitAcrossWrites(t *testing.T) {
+	var forwarded bytes.Buffer
+	var reported []int
+	scanner := &progressScanner{
+		out:    &forwarded,
+		report: func(percent int) { reported = append(reported, percent) },
+	}
+
+	scanner.Write([]byte("whisper_print_progress_call"))
+	scanner.Write([]byte("back: progress =  75"))
+	scanner.Write([]byte("%\n"))
+
+	if len(reported) != 1 || reported[0] != 75 {
+		t.Errorf("got %v, want [75]", reported)
+	}
+	want := "whisper_print_progress_callback: progress =  75%\n"
+	if forwarded.String() != want {
+		t.Errorf("forwarded %q, want %q", forwarded.String(), want)
 	}
 }

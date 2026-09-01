@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,7 +23,11 @@ type WhisperCLI struct {
 	// Binary is the executable to run; empty means BinaryName from $PATH.
 	Binary string
 	// Stderr, when set, receives whisper-cli's progress output.
-	Stderr *os.File
+	Stderr io.Writer
+	// Progress, when set, is called with the decoding percentage as whisper-cli
+	// reports it. Setting it also turns on --print-progress, so leaving it nil
+	// keeps the subprocess's output exactly as it is without one.
+	Progress func(percent int)
 }
 
 // Transcribe runs whisper-cli over wavPath and parses its JSON output.
@@ -66,6 +72,9 @@ func (w *WhisperCLI) Transcribe(ctx context.Context, wavPath string, opts Option
 	if opts.VAD {
 		args = append(args, "--vad", "--vad-model", opts.VADModelPath)
 	}
+	if w.Progress != nil {
+		args = append(args, "--print-progress")
+	}
 
 	bin := w.Binary
 	if bin == "" {
@@ -78,10 +87,11 @@ func (w *WhisperCLI) Transcribe(ctx context.Context, wavPath string, opts Option
 		// whisper-cli prints each segment to stdout as it decodes; routing it
 		// here surfaces progress without polluting our own stdout, which
 		// carries the output paths for callers that pipe them.
-		cmd.Stdout = w.Stderr
-		cmd.Stderr = w.Stderr
+		out := w.watchProgress(w.Stderr)
+		cmd.Stdout = out
+		cmd.Stderr = out
 	} else {
-		cmd.Stderr = &stderr
+		cmd.Stderr = w.watchProgress(&stderr)
 	}
 
 	if err := cmd.Run(); err != nil {
@@ -96,6 +106,61 @@ func (w *WhisperCLI) Transcribe(ctx context.Context, wavPath string, opts Option
 		return nil, fmt.Errorf("asr: read %s output: %w", bin, err)
 	}
 	return ParseWhisperJSON(data)
+}
+
+// watchProgress wraps out so whisper-cli's progress lines are reported while
+// everything it writes still reaches out unchanged.
+func (w *WhisperCLI) watchProgress(out io.Writer) io.Writer {
+	if w.Progress == nil {
+		return out
+	}
+	return &progressScanner{out: out, report: w.Progress}
+}
+
+// progressScanner forwards every byte written to it while pulling whisper-cli's
+// progress reports out of the stream. It cannot separate them by stream instead:
+// whisper-cli interleaves progress with the segments it has decoded.
+type progressScanner struct {
+	out     io.Writer
+	report  func(percent int)
+	partial []byte
+}
+
+func (p *progressScanner) Write(b []byte) (int, error) {
+	p.partial = append(p.partial, b...)
+	for {
+		end := bytes.IndexByte(p.partial, '\n')
+		if end < 0 {
+			break
+		}
+		if percent := parseProgressLine(string(p.partial[:end])); percent >= 0 {
+			p.report(percent)
+		}
+		p.partial = append(p.partial[:0], p.partial[end+1:]...)
+	}
+	return p.out.Write(b)
+}
+
+// progressPrefix is what whisper-cli writes before each percentage once it is
+// given --print-progress.
+const progressPrefix = "whisper_print_progress_callback: progress ="
+
+// parseProgressLine returns the percentage a whisper-cli progress line reports,
+// or -1 for any other line.
+func parseProgressLine(line string) int {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(line), progressPrefix)
+	if !ok {
+		return -1
+	}
+	rest, ok = strings.CutSuffix(strings.TrimSpace(rest), "%")
+	if !ok {
+		return -1
+	}
+	percent, err := strconv.Atoi(strings.TrimSpace(rest))
+	if err != nil || percent < 0 || percent > 100 {
+		return -1
+	}
+	return percent
 }
 
 // whisperJSON mirrors the subset of whisper.cpp's --output-json document that

@@ -19,6 +19,7 @@ import (
 	"github.com/santi/record-transcriber/internal/format"
 	"github.com/santi/record-transcriber/internal/media"
 	"github.com/santi/record-transcriber/internal/modelstore"
+	"github.com/santi/record-transcriber/internal/progress"
 	"github.com/santi/record-transcriber/internal/summary"
 )
 
@@ -31,6 +32,7 @@ type config struct {
 	summaryKind summary.Kind
 	threads     int
 	keepWAV     bool
+	jsonEvents  bool
 }
 
 func main() {
@@ -46,6 +48,22 @@ func run() error {
 		return err
 	}
 
+	// stdout carries the machine-readable result and stderr the narration, in
+	// both modes. -json swaps bare output paths on stdout for a live event
+	// stream that already contains them.
+	var events progress.Emitter = &progress.Text{W: os.Stderr}
+	if cfg.jsonEvents {
+		events = &progress.JSON{W: os.Stdout}
+	}
+
+	if err := transcribe(cfg, events); err != nil {
+		events.Emit(progress.Error(err))
+		return err
+	}
+	return nil
+}
+
+func transcribe(cfg config, events progress.Emitter) error {
 	// Everything that can fail without doing work fails here, so a missing
 	// dependency or credential surfaces in a second rather than after a long
 	// transcription.
@@ -64,25 +82,33 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	modelPath, err := modelstore.EnsureModel(ctx, cfg.model, os.Stderr)
+	report := func(d modelstore.Download) {
+		events.Emit(progress.Model(d.Model, d.BytesDone, d.BytesTotal, d.Done))
+	}
+	modelPath, err := modelstore.EnsureModel(ctx, cfg.model, report)
 	if err != nil {
 		return err
 	}
-	vadModelPath, err := modelstore.EnsureModel(ctx, modelstore.VADModel, os.Stderr)
+	vadModelPath, err := modelstore.EnsureModel(ctx, modelstore.VADModel, report)
 	if err != nil {
 		return err
 	}
 
-	wavPath, cleanup, err := prepareAudio(ctx, cfg)
+	wavPath, cleanup, err := prepareAudio(ctx, cfg, events)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	fmt.Fprintln(os.Stderr, "Transcribing...")
+	events.Emit(progress.Stage(progress.StageTranscribe))
 	started := time.Now()
 
 	transcriber := &asr.WhisperCLI{Stderr: os.Stderr}
+	if cfg.jsonEvents {
+		// Only in JSON mode: --print-progress would otherwise add lines to the
+		// output a terminal user sees today.
+		transcriber.Progress = func(percent int) { events.Emit(progress.Progress(percent)) }
+	}
 	result, err := transcriber.Transcribe(ctx, wavPath, asr.Options{
 		Language:     cfg.language,
 		ModelPath:    modelPath,
@@ -94,16 +120,15 @@ func run() error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Done in %s (language: %s, %d segments)\n",
-		time.Since(started).Round(time.Second), result.Language, len(result.Segments))
+	events.Emit(progress.Transcript(result.Language, len(result.Segments), time.Since(started)))
 
-	written, err := writeOutputs(cfg, result)
+	written, err := writeOutputs(cfg, result, events)
 	if err != nil {
 		return err
 	}
 
 	if cfg.summaryKind != summary.KindNone {
-		fmt.Fprintf(os.Stderr, "Generating %s...\n", cfg.summaryKind)
+		events.Emit(progress.Summary(string(cfg.summaryKind)))
 		text, err := summary.Generate(ctx, result, cfg.summaryKind)
 		if err != nil {
 			return err
@@ -112,11 +137,16 @@ func run() error {
 		if err := os.WriteFile(path, []byte(text+"\n"), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
+		events.Emit(progress.Output("summary", path))
 		written = append(written, path)
 	}
 
-	for _, path := range written {
-		fmt.Println(path)
+	// The event stream already announced every path, so printing them again
+	// would break the one-JSON-object-per-line contract.
+	if !cfg.jsonEvents {
+		for _, path := range written {
+			fmt.Println(path)
+		}
 	}
 	return nil
 }
@@ -135,6 +165,7 @@ func parseArgs(args []string) (config, error) {
 	summaryFlag := fs.String("summary", "none", "generate a summary from the transcript: none, resumen or minuta")
 	threads := fs.Int("threads", runtime.NumCPU(), "decoding threads")
 	keepWAV := fs.Bool("keep-wav", false, "keep the intermediate 16 kHz WAV file")
+	jsonEvents := fs.Bool("json", false, "report progress as one JSON object per line on stdout, for a program driving this tool")
 
 	fs.StringVar(output, "o", "", "shorthand for -output")
 	fs.StringVar(formats, "f", "txt,srt", "shorthand for -format")
@@ -173,6 +204,7 @@ func parseArgs(args []string) (config, error) {
 		summaryKind: kind,
 		threads:     *threads,
 		keepWAV:     *keepWAV,
+		jsonEvents:  *jsonEvents,
 	}, nil
 }
 
@@ -222,16 +254,15 @@ func checkDependencies() error {
 
 // prepareAudio produces the 16 kHz mono WAV whisper needs, and returns a
 // cleanup func that removes it unless --keep-wav was given.
-func prepareAudio(ctx context.Context, cfg config) (string, func(), error) {
+func prepareAudio(ctx context.Context, cfg config, events progress.Emitter) (string, func(), error) {
 	noop := func() {}
 
 	if seconds, err := media.Duration(ctx, cfg.input); err == nil && seconds > 0 {
-		fmt.Fprintf(os.Stderr, "Input: %s (%s)\n",
-			filepath.Base(cfg.input), (time.Duration(seconds) * time.Second).Round(time.Second))
+		events.Emit(progress.Input(filepath.Base(cfg.input), time.Duration(seconds)*time.Second))
 	}
 
 	wavPath := cfg.outputBase + ".16k.wav"
-	fmt.Fprintln(os.Stderr, "Extracting audio...")
+	events.Emit(progress.Stage(progress.StageExtract))
 	if err := media.ExtractAudio(ctx, cfg.input, wavPath); err != nil {
 		return "", noop, err
 	}
@@ -242,7 +273,7 @@ func prepareAudio(ctx context.Context, cfg config) (string, func(), error) {
 	return wavPath, func() { os.Remove(wavPath) }, nil
 }
 
-func writeOutputs(cfg config, result *asr.Result) ([]string, error) {
+func writeOutputs(cfg config, result *asr.Result, events progress.Emitter) ([]string, error) {
 	writers := map[string]func(*os.File, *asr.Result) error{
 		"txt": func(f *os.File, r *asr.Result) error { return format.WriteText(f, r) },
 		"srt": func(f *os.File, r *asr.Result) error { return format.WriteSRT(f, r) },
@@ -263,6 +294,7 @@ func writeOutputs(cfg config, result *asr.Result) ([]string, error) {
 		if err := f.Close(); err != nil {
 			return written, fmt.Errorf("close %s: %w", path, err)
 		}
+		events.Emit(progress.Output(name, path))
 		written = append(written, path)
 	}
 	return written, nil

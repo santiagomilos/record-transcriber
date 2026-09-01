@@ -45,10 +45,21 @@ func CacheDir() (string, error) {
 	return filepath.Join(dir, "record-transcriber", "models"), nil
 }
 
+// Download reports how far a model download has got. BytesTotal is zero when
+// the server sent no content length.
+type Download struct {
+	Model      string
+	BytesDone  int64
+	BytesTotal int64
+	// Done marks the final report for a download.
+	Done bool
+}
+
 // EnsureModel returns the path to the named ggml model, downloading it into the
-// cache if it is not there yet. Progress is reported to progress, which may be
-// nil.
-func EnsureModel(ctx context.Context, name string, progress io.Writer) (string, error) {
+// cache if it is not there yet. report, which may be nil, is called once when a
+// download starts, then at most once a second while it runs, then once with
+// Done set. It is not called at all when the model is already cached.
+func EnsureModel(ctx context.Context, name string, report func(Download)) (string, error) {
 	if name == "" {
 		name = DefaultModel
 	}
@@ -68,10 +79,7 @@ func EnsureModel(ctx context.Context, name string, progress io.Writer) (string, 
 		return path, nil
 	}
 
-	if progress != nil {
-		fmt.Fprintf(progress, "Downloading model %s (this happens once)\n", name)
-	}
-	if err := download(ctx, modelURL(filename), path, progress); err != nil {
+	if err := download(ctx, modelURL(filename), path, name, report); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -80,7 +88,7 @@ func EnsureModel(ctx context.Context, name string, progress io.Writer) (string, 
 // download fetches url into path. It writes to a .part file and renames on
 // success, so an interrupted download never leaves a truncated model behind
 // that would later fail deep inside whisper-cli.
-func download(ctx context.Context, url, path string, progress io.Writer) error {
+func download(ctx context.Context, url, path, model string, report func(Download)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("modelstore: build request: %w", err)
@@ -103,12 +111,16 @@ func download(ctx context.Context, url, path string, progress io.Writer) error {
 	}
 
 	var dst io.Writer = f
-	if progress != nil {
-		dst = io.MultiWriter(f, &progressWriter{
-			out:   progress,
-			total: resp.ContentLength,
-			last:  time.Now(),
-		})
+	var counter *progressCounter
+	if report != nil {
+		report(Download{Model: model, BytesTotal: resp.ContentLength})
+		counter = &progressCounter{
+			model:  model,
+			total:  resp.ContentLength,
+			report: report,
+			last:   time.Now(),
+		}
+		dst = io.MultiWriter(f, counter)
 	}
 
 	if _, err := io.Copy(dst, resp.Body); err != nil {
@@ -120,8 +132,8 @@ func download(ctx context.Context, url, path string, progress io.Writer) error {
 		os.Remove(partPath)
 		return fmt.Errorf("modelstore: close %s: %w", partPath, err)
 	}
-	if progress != nil {
-		fmt.Fprintln(progress)
+	if counter != nil {
+		report(Download{Model: model, BytesDone: counter.written, BytesTotal: counter.total, Done: true})
 	}
 
 	if err := os.Rename(partPath, path); err != nil {
@@ -131,27 +143,22 @@ func download(ctx context.Context, url, path string, progress io.Writer) error {
 	return nil
 }
 
-// progressWriter prints download progress, throttled so it does not flood a
-// terminal or a log file.
-type progressWriter struct {
-	out     io.Writer
+// progressCounter reports download progress, throttled so it does not flood a
+// terminal, a log file, or an event stream.
+type progressCounter struct {
+	model   string
 	total   int64
 	written int64
+	report  func(Download)
 	last    time.Time
 }
 
-func (p *progressWriter) Write(b []byte) (int, error) {
+func (p *progressCounter) Write(b []byte) (int, error) {
 	p.written += int64(len(b))
 	if time.Since(p.last) < time.Second {
 		return len(b), nil
 	}
 	p.last = time.Now()
-
-	if p.total > 0 {
-		fmt.Fprintf(p.out, "\r  %d%% (%d/%d MiB)",
-			p.written*100/p.total, p.written>>20, p.total>>20)
-	} else {
-		fmt.Fprintf(p.out, "\r  %d MiB", p.written>>20)
-	}
+	p.report(Download{Model: p.model, BytesDone: p.written, BytesTotal: p.total})
 	return len(b), nil
 }
