@@ -15,6 +15,29 @@ final class Preferences {
         static let summaryKind = "summaryKind"
         static let model = "model"
         static let summaryKindMigratedToAuto = "summaryKindMigratedToAuto"
+        static let importNaming = "importNaming"
+    }
+
+    /// ImportNaming is how an imported file's session is named by default:
+    /// after the file, or after the moment it was imported, the way recordings
+    /// are. Either can be renamed afterwards.
+    enum ImportNaming: String, CaseIterable {
+        case fileName
+        case date
+
+        /// name is the session name for a file imported at `date`. A file with
+        /// no stem (`.opus` alone) falls back to the date: Foundation reads
+        /// such a name as a hidden file with no extension, and a folder called
+        /// `.opus` would be hidden too, and skipped by the listing.
+        func name(for url: URL, at date: Date) -> String {
+            switch self {
+            case .fileName:
+                let stem = url.deletingPathExtension().lastPathComponent
+                return stem.isEmpty || stem.hasPrefix(".") ? Session.folderName(for: date) : stem
+            case .date:
+                return Session.folderName(for: date)
+            }
+        }
     }
 
     static let languages = ["auto", "es", "en"]
@@ -71,6 +94,18 @@ final class Preferences {
         didSet { defaults.set(model, forKey: Key.model) }
     }
 
+    var importNaming: ImportNaming {
+        didSet { defaults.set(importNaming.rawValue, forKey: Key.importNaming) }
+    }
+
+    /// onDemandSummaryKind is the kind a summary generated on request uses.
+    /// `none` means "not with every transcription", which is exactly what an
+    /// explicit request is not, and the CLI rejects it with a transcript input,
+    /// so it falls back to `auto`.
+    var onDemandSummaryKind: String {
+        summaryKind == "none" ? "auto" : summaryKind
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -84,6 +119,8 @@ final class Preferences {
         formats = defaults.stringArray(forKey: Key.formats) ?? ["txt", "srt"]
         summaryKind = defaults.string(forKey: Key.summaryKind) ?? "auto"
         model = defaults.string(forKey: Key.model) ?? Preferences.defaultModel
+        importNaming = defaults.string(forKey: Key.importNaming)
+            .flatMap(ImportNaming.init(rawValue:)) ?? .fileName
 
         // `minuta` was the default before `auto` existed, so a stored `minuta`
         // is almost always the old default rather than a choice. Move it once
@@ -102,14 +139,15 @@ final class Preferences {
     /// transcribeArguments renders the preferences as the flags
     /// `cmd/transcribe` accepts. The order is fixed so the result is testable,
     /// and the input path comes last because the CLI expects one bare argument.
-    func transcribeArguments(input: URL, outputBase: URL) -> [String] {
+    /// summaryKind, when given, replaces the preferred kind for this run.
+    func transcribeArguments(input: URL, outputBase: URL, summaryKind: String? = nil) -> [String] {
         [
             "-json",
             "-o", outputBase.path,
             "-f", formats.joined(separator: ","),
             "-l", language,
             "-m", model,
-            "-summary", summaryKind,
+            "-summary", summaryKind ?? self.summaryKind,
             input.path,
         ]
     }

@@ -5,10 +5,16 @@ enum LibraryWindow {
     static let id = "library"
 }
 
-/// LibraryView is the window: the list of recordings on the left, whatever the
-/// selected one produced on the right.
+/// LibraryView is the window: the recordings or the imported files on the
+/// left, whatever the selected one produced on the right.
 struct LibraryView: View {
     @Bindable var model: AppModel
+
+    /// renaming is the session whose new name is being typed, and newName the
+    /// text. They live here rather than in the row or the detail view because
+    /// both open the same field.
+    @State private var renaming: Session?
+    @State private var newName = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -20,11 +26,18 @@ struct LibraryView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.panelGradient)
         }
-        .onDrop(of: [.audio, .movie, .mpeg4Movie], isTargeted: nil, perform: handleDrop)
+        .onDrop(of: [.audio, .movie], isTargeted: nil, perform: handleDrop)
         .alert("No se pudo completar", isPresented: showingFailure) {
             Button("Entendido", role: .cancel) { model.failure = nil }
         } message: {
             Text(model.failure ?? "")
+        }
+        .alert("Renombrar", isPresented: showingRename, presenting: renaming) { session in
+            TextField("Nombre", text: $newName)
+            Button("Renombrar") { model.rename(session, to: newName) }
+            Button("Cancelar", role: .cancel) {}
+        } message: { _ in
+            Text("El nombre es el de la carpeta en la biblioteca.")
         }
         .task { model.recheckTools() }
     }
@@ -33,14 +46,31 @@ struct LibraryView: View {
         Binding(get: { model.failure != nil }, set: { if !$0 { model.failure = nil } })
     }
 
+    private var showingRename: Binding<Bool> {
+        Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })
+    }
+
+    private func startRenaming(_ session: Session) {
+        newName = session.name
+        renaming = session
+    }
+
     // MARK: Sidebar
+
+    private var sessions: [Session] {
+        model.librarySection == .recordings ? model.library.sessions : model.imports.sessions
+    }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Theme.Space.md) {
-                SectionLabel(text: "Grabaciones")
-                Spacer()
-                recordButton
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                TabStrip(items: AppModel.LibrarySection.allCases,
+                         title: \.title,
+                         selection: $model.librarySection)
+                sectionAction
+                if let progress = model.importProgress {
+                    importStatus(progress)
+                }
             }
             .padding(.horizontal, Theme.panelPadding)
             .padding(.vertical, Theme.Space.md)
@@ -52,10 +82,10 @@ struct LibraryView: View {
                             .padding(.bottom, Theme.Space.md)
                     }
 
-                    if model.library.sessions.isEmpty {
-                        emptyLibrary
+                    if sessions.isEmpty {
+                        emptyList
                     } else {
-                        ForEach(model.library.sessions) { session in
+                        ForEach(sessions) { session in
                             PanelRow(icon: "waveform",
                                      title: session.displayName,
                                      subtitle: subtitle(for: session),
@@ -65,6 +95,8 @@ struct LibraryView: View {
                                 StatusBadge(status: session.status)
                             }
                             .contextMenu {
+                                Button("Renombrar…") { startRenaming(session) }
+                                    .disabled(model.isBusy)
                                 Button("Mostrar en Finder") {
                                     NSWorkspace.shared.activateFileViewerSelecting([session.folder])
                                 }
@@ -79,25 +111,49 @@ struct LibraryView: View {
         }
     }
 
-    @ViewBuilder private var recordButton: some View {
-        if model.recorder.isRecording {
-            Button("Detener") { Task { await model.stopRecording() } }
-                .buttonStyle(FilledButtonStyle(tint: Theme.recording))
-                .fixedSize()
-        } else {
-            Button("Grabar") { Task { await model.startRecording() } }
+    @ViewBuilder private var sectionAction: some View {
+        switch model.librarySection {
+        case .recordings:
+            recordButton
+        case .imports:
+            Button("Transcribir archivo…") { importFromDialog() }
                 .buttonStyle(FilledButtonStyle())
-                .fixedSize()
                 .disabled(model.isBusy)
         }
     }
 
-    private var emptyLibrary: some View {
+    @ViewBuilder private var recordButton: some View {
+        if model.recorder.isRecording {
+            Button("Detener") { Task { await model.stopRecording() } }
+                .buttonStyle(FilledButtonStyle(tint: Theme.recording))
+        } else {
+            Button("Grabar") { Task { await model.startRecording() } }
+                .buttonStyle(FilledButtonStyle())
+                .disabled(model.isBusy)
+        }
+    }
+
+    private func importStatus(_ progress: AppModel.ImportProgress) -> some View {
+        HStack {
+            Text("Transcribiendo archivo \(min(progress.done + 1, progress.total)) de \(progress.total)")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Button("Cancelar") { model.cancelImports() }
+                .buttonStyle(.plain)
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.accent)
+        }
+    }
+
+    private var emptyList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Text("Sin grabaciones")
+            Text(model.librarySection == .recordings ? "Sin grabaciones" : "Sin archivos")
                 .font(Theme.rowTitleFont)
                 .foregroundStyle(Theme.textSecondary)
-            Text("Graba desde la barra de menús, o arrastra aquí un archivo de audio o video.")
+            Text(model.librarySection == .recordings
+                ? "Graba desde la barra de menús, o arrastra aquí un archivo de audio o video."
+                : "Elige Transcribir archivo…, o arrastra aquí audio o video.")
                 .font(Theme.captionFont)
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +176,10 @@ struct LibraryView: View {
 
     @ViewBuilder private var detail: some View {
         if let session = model.selectedSession {
-            SessionDetailView(model: model, session: session)
+            SessionDetailView(model: model, session: session, onRename: startRenaming)
+                // Keyed by session so the tab state starts over per session
+                // rather than carrying over from the one shown before.
+                .id(session.id)
         } else {
             VStack(spacing: Theme.Space.md) {
                 Image(systemName: "doc.text")
@@ -134,13 +193,32 @@ struct LibraryView: View {
         }
     }
 
+    // MARK: Importing
+
+    private func importFromDialog() {
+        let urls = MediaFilePicker.chooseFiles()
+        guard !urls.isEmpty else { return }
+        Task { await model.importFiles(urls) }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        _ = provider.loadObject(ofClass: URL.self) { url, _ in
-            guard let url else { return }
-            Task { @MainActor in await model.importFile(url) }
+        guard !providers.isEmpty else { return false }
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                if let url = await loadURL(from: provider) { urls.append(url) }
+            }
+            await model.importFiles(urls)
         }
         return true
+    }
+
+    private func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                continuation.resume(returning: url)
+            }
+        }
     }
 }
 

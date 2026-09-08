@@ -187,6 +187,49 @@ struct StatusBadge: View {
     }
 }
 
+/// TabStrip is a row of named choices with one selected, used for the detail
+/// view's transcript and summary tabs and for the window's two lists. One
+/// component rather than two strips that drift apart.
+struct TabStrip<Item: Hashable & Identifiable, Trailing: View>: View {
+    let items: [Item]
+    let title: (Item) -> String
+    @Binding var selection: Item
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items) { item in
+                Button {
+                    selection = item
+                } label: {
+                    Text(title(item))
+                        .font(Theme.rowTitleFont)
+                        .foregroundStyle(selection == item ? Theme.textPrimary : Theme.textSecondary)
+                        .padding(.horizontal, Theme.Space.lg)
+                        .padding(.vertical, Theme.Space.sm)
+                        .background(selection == item ? Theme.rowHover : .clear,
+                                    in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+                        .contentShape(RoundedRectangle(cornerRadius: Theme.rowRadius))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            trailing
+        }
+        .padding(3)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius)
+                .strokeBorder(Theme.cardBorder, lineWidth: 1))
+    }
+}
+
+extension TabStrip where Trailing == EmptyView {
+    init(items: [Item], title: @escaping (Item) -> String, selection: Binding<Item>) {
+        self.init(items: items, title: title, selection: selection) { EmptyView() }
+    }
+}
+
 /// LevelMeter shows both sources separately. Two bars rather than one is
 /// deliberate: the common failure is capturing only your own voice, and a single
 /// mixed bar hides it.

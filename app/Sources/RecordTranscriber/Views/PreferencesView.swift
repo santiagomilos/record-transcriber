@@ -26,8 +26,7 @@ struct PreferencesView: View {
         .tint(Theme.accent)
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
             if case let .success(url) = result {
-                preferences.libraryFolder = url
-                model.library.folder = url
+                model.setLibraryFolder(url)
             }
         }
     }
@@ -65,6 +64,15 @@ struct PreferencesView: View {
                     .buttonStyle(FilledButtonStyle(tint: Theme.textPrimary, isProminent: false))
             }
             .padding(.vertical, Theme.Space.xs)
+
+            SettingRow(label: "Archivos") {
+                Picker("", selection: $preferences.importNaming) {
+                    Text("Nombre original").tag(Preferences.ImportNaming.fileName)
+                    Text("Fecha").tag(Preferences.ImportNaming.date)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
         }
     }
 

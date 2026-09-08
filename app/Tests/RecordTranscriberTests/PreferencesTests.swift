@@ -10,6 +10,19 @@ private func isolatedPreferences() -> Preferences {
     return Preferences(defaults: defaults)
 }
 
+/// A fixed instant, so the date name a test asserts never depends on when it
+/// runs: 2026-09-01 03:14:15 local time.
+private let importedAt: Date = {
+    var components = DateComponents()
+    components.year = 2026
+    components.month = 9
+    components.day = 1
+    components.hour = 3
+    components.minute = 14
+    components.second = 15
+    return Calendar.current.date(from: components)!
+}()
+
 @Test func startsWithTheDocumentedDefaults() {
     let preferences = isolatedPreferences()
     #expect(preferences.language == "auto")
@@ -17,6 +30,62 @@ private func isolatedPreferences() -> Preferences {
     #expect(preferences.summaryKind == "auto")
     #expect(preferences.model == "large-v3-turbo")
     #expect(preferences.libraryFolder.lastPathComponent == "Grabaciones")
+    #expect(preferences.importNaming == .fileName)
+}
+
+@Test func persistsTheImportNamingAcrossARelaunch() {
+    let name = "record-transcriber-tests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+
+    let first = Preferences(defaults: defaults)
+    first.importNaming = .date
+
+    let second = Preferences(defaults: defaults)
+    #expect(second.importNaming == .date)
+}
+
+@Test func namesAnImportAfterItsFile() {
+    let url = URL(fileURLWithPath: "/x/PTT-20260901-WA0003.opus")
+    #expect(Preferences.ImportNaming.fileName.name(for: url, at: importedAt) == "PTT-20260901-WA0003")
+}
+
+@Test func namesAnImportAfterTheDate() {
+    let url = URL(fileURLWithPath: "/x/PTT-20260901-WA0003.opus")
+    #expect(Preferences.ImportNaming.date.name(for: url, at: importedAt) == "2026-09-01 0314")
+}
+
+@Test func fallsBackToTheDateForAFileWithNoStem() {
+    let url = URL(fileURLWithPath: "/x/.opus")
+    #expect(Preferences.ImportNaming.fileName.name(for: url, at: importedAt) == "2026-09-01 0314")
+}
+
+@Test func fallsBackToAutoWhenNoSummaryIsPreferred() {
+    let preferences = isolatedPreferences()
+    preferences.summaryKind = "none"
+    #expect(preferences.onDemandSummaryKind == "auto")
+
+    preferences.summaryKind = "minuta"
+    #expect(preferences.onDemandSummaryKind == "minuta")
+}
+
+@Test func overridesTheSummaryKindForASummaryOnlyRun() {
+    let preferences = isolatedPreferences()
+    preferences.summaryKind = "none"
+
+    let arguments = preferences.transcribeArguments(
+        input: URL(fileURLWithPath: "/recordings/Archivos/PTT/transcript.srt"),
+        outputBase: URL(fileURLWithPath: "/recordings/Archivos/PTT/transcript"),
+        summaryKind: "auto")
+
+    #expect(arguments == [
+        "-json",
+        "-o", "/recordings/Archivos/PTT/transcript",
+        "-f", "txt,srt",
+        "-l", "auto",
+        "-m", "large-v3-turbo",
+        "-summary", "auto",
+        "/recordings/Archivos/PTT/transcript.srt",
+    ])
 }
 
 @Test func rendersTheDefaultsAsTranscribeFlags() {

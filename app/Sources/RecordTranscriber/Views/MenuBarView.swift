@@ -118,9 +118,14 @@ struct MenuBarView: View {
                         .buttonStyle(FilledButtonStyle(tint: Theme.textSecondary, isProminent: false))
                 }
             }
-        } else if model.runner.isRunning {
+        } else if model.runner.isRunning || model.importProgress != nil {
             PanelCard(padding: Theme.Space.md) {
                 PhaseProgress(phase: model.runner.phase)
+                if let progress = model.importProgress {
+                    Text("Archivo \(min(progress.done + 1, progress.total)) de \(progress.total)")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.textTertiary)
+                }
             }
         } else {
             PanelCard(padding: Theme.Space.xs) {
@@ -136,8 +141,24 @@ struct MenuBarView: View {
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .keyboardShortcut("r")
+
+                PanelRow(icon: "square.and.arrow.down",
+                         title: "Transcribir archivo…",
+                         subtitle: "Audio o video existente",
+                         isEnabled: !model.isBusy) {
+                    importFiles()
+                }
             }
         }
+    }
+
+    /// importFiles asks for files and hands them to the window, which is where
+    /// their progress and their transcripts are shown.
+    private func importFiles() {
+        let urls = MediaFilePicker.chooseFiles()
+        guard !urls.isEmpty else { return }
+        openLibrary()
+        Task { await model.importFiles(urls) }
     }
 
     // MARK: Recent recordings
@@ -198,7 +219,12 @@ struct MenuBarView: View {
     /// activated on its own, so without the explicit activation the window opens
     /// behind whatever the user was looking at.
     private func openLibrary(selecting session: Session? = nil) {
-        if let session { model.selection = session.id }
+        if let session {
+            // The recents are recordings, so the window has to be on that list
+            // for the selection to be visible.
+            model.librarySection = .recordings
+            model.selection = session.id
+        }
         activate()
         openWindow(id: LibraryWindow.id)
     }

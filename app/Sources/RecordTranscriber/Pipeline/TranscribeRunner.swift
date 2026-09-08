@@ -56,11 +56,20 @@ final class TranscribeRunner {
     private(set) var result: Result?
 
     @ObservationIgnored private var process: Process?
+    /// inputDurationMS arrives on the `input` event, before any decoding, and
+    /// is folded into `result` when the `transcript` event closes the run: the
+    /// latter never carries the duration itself.
+    @ObservationIgnored private var inputDurationMS: Int64 = 0
 
     /// run transcribes input, writing its outputs alongside outputBase, and
     /// returns when the binary exits. It throws when the run fails, carrying the
     /// message the pipeline reported rather than an exit status.
-    func run(input: URL, outputBase: URL, preferences: Preferences) async throws {
+    ///
+    /// summaryKind overrides the preferred one for this run only: `none` for an
+    /// import that wants a transcript first, or the kind to generate from a
+    /// transcript that already exists.
+    func run(input: URL, outputBase: URL, preferences: Preferences,
+             summaryKind: String? = nil) async throws {
         guard !isRunning else { return }
         guard let binary = TranscribeRunner.binary() else {
             throw RecordingError.missingTool("transcribe")
@@ -69,6 +78,7 @@ final class TranscribeRunner {
         isRunning = true
         outputs = [:]
         result = nil
+        inputDurationMS = 0
         phase = .extracting
         defer {
             isRunning = false
@@ -81,7 +91,9 @@ final class TranscribeRunner {
         let process = Process()
         process.executableURL = binary
         process.environment = ToolPaths.childEnvironment
-        process.arguments = preferences.transcribeArguments(input: input, outputBase: outputBase)
+        process.arguments = preferences.transcribeArguments(input: input,
+                                                            outputBase: outputBase,
+                                                            summaryKind: summaryKind)
         process.standardOutput = events
         process.standardError = diagnostics
         self.process = process
@@ -128,9 +140,12 @@ final class TranscribeRunner {
     }
 
     /// apply folds one event into the published state, returning the message of
-    /// an error event.
-    private func apply(_ event: PipelineEvent) -> String? {
+    /// an error event. It is not private so a test can fold a literal stream
+    /// without spawning the binary.
+    func apply(_ event: PipelineEvent) -> String? {
         switch event.event {
+        case .input:
+            inputDurationMS = event.durationMS
         case .model:
             phase = .downloadingModel(name: event.name ?? "", fraction: event.fractionDownloaded)
         case .stage:
@@ -145,7 +160,7 @@ final class TranscribeRunner {
         case .transcript:
             result = Result(language: event.language,
                             segments: event.segments,
-                            durationMS: event.durationMS,
+                            durationMS: inputDurationMS,
                             elapsedMS: event.elapsedMS)
         case .output:
             if let kind = event.kind, let path = event.path {

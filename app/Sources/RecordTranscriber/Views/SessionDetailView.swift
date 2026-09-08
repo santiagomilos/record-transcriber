@@ -4,6 +4,9 @@ import SwiftUI
 struct SessionDetailView: View {
     @Bindable var model: AppModel
     let session: Session
+    /// onRename asks the window to open its rename field for this session; the
+    /// field lives there because the row's context menu opens the same one.
+    let onRename: (Session) -> Void
 
     private enum Tab: String, CaseIterable, Identifiable {
         case transcript = "Transcripción"
@@ -11,7 +14,16 @@ struct SessionDetailView: View {
         var id: String { rawValue }
     }
 
-    @State private var tab: Tab = .summary
+    @State private var tab: Tab
+
+    init(model: AppModel, session: Session, onRename: @escaping (Session) -> Void) {
+        self.model = model
+        self.session = session
+        self.onRename = onRename
+        // An import has no summary until asked for one, so opening on an empty
+        // summary tab would show a placeholder where the transcript is.
+        _tab = State(initialValue: session.hasSummary ? .summary : .transcript)
+    }
 
     var body: some View {
         // Read once and hand it to both halves: the properties behind it open
@@ -22,9 +34,16 @@ struct SessionDetailView: View {
             header
 
             if model.runner.isRunning {
-                PhaseProgress(phase: model.runner.phase)
-                    .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
-                    .padding(.bottom, Theme.Space.md)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    PhaseProgress(phase: model.runner.phase)
+                    if let progress = model.importProgress {
+                        Text("Archivo \(min(progress.done + 1, progress.total)) de \(progress.total)")
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
+                .padding(.bottom, Theme.Space.md)
             }
 
             tabs(copyable: text)
@@ -49,8 +68,24 @@ struct SessionDetailView: View {
                 Text(session.displayName)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 StatusBadge(status: session.status)
                 Spacer()
+
+                if session.summarizableTranscriptURL != nil {
+                    Button(session.hasSummary ? "Resumir de nuevo" : "Resumir") {
+                        Task { await model.summarize(session) }
+                    }
+                    .buttonStyle(FilledButtonStyle(isProminent: !session.hasSummary))
+                    .fixedSize()
+                    .disabled(model.isBusy || claudeIsMissing)
+                }
+
+                IconButton(icon: "pencil", help: "Renombrar") {
+                    onRename(session)
+                }
+                .disabled(model.isBusy)
 
                 IconButton(icon: "arrow.clockwise", help: "Transcribir de nuevo") {
                     Task { await model.transcribe(session) }
@@ -73,12 +108,20 @@ struct SessionDetailView: View {
         .padding(.bottom, Theme.Space.lg)
     }
 
-    /// facts is the metadata line under the title: how long the recording is,
-    /// what language it turned out to be, how many segments the transcript has.
-    /// It is nil for a session recorded before the sidecar existed.
+    /// A summary is a `claude` run, so the button that asks for one is disabled
+    /// rather than failing after the click when the tool is not installed.
+    private var claudeIsMissing: Bool {
+        model.missingTools.contains { $0.binary == Tool.claude.binary }
+    }
+
+    /// facts is the metadata line under the title: the file an import came
+    /// from, how long the recording is, what language it turned out to be, how
+    /// many segments the transcript has. It is nil for a session recorded
+    /// before the sidecar existed.
     private var facts: String? {
         guard let metadata = session.metadata else { return nil }
         var parts: [String] = []
+        if let source = metadata.sourceName, !source.isEmpty { parts.append(source) }
         if metadata.durationSeconds > 0 { parts.append(formatDuration(metadata.durationSeconds)) }
         if let language = metadata.language, !language.isEmpty { parts.append("idioma \(language)") }
         if metadata.segments > 0 { parts.append("\(metadata.segments) segmentos") }
@@ -88,35 +131,13 @@ struct SessionDetailView: View {
     // MARK: Tabs
 
     private func tabs(copyable text: String?) -> some View {
-        HStack(spacing: 2) {
-            ForEach(Tab.allCases) { candidate in
-                Button {
-                    tab = candidate
-                } label: {
-                    Text(candidate.rawValue)
-                        .font(Theme.rowTitleFont)
-                        .foregroundStyle(tab == candidate ? Theme.textPrimary : Theme.textSecondary)
-                        .padding(.horizontal, Theme.Space.lg)
-                        .padding(.vertical, Theme.Space.sm)
-                        .background(tab == candidate ? Theme.rowHover : .clear,
-                                    in: RoundedRectangle(cornerRadius: Theme.rowRadius))
-                        .contentShape(RoundedRectangle(cornerRadius: Theme.rowRadius))
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-
+        TabStrip(items: Tab.allCases, title: \.rawValue, selection: $tab) {
             // The button sits with the tabs rather than in the header because it
             // copies the tab that is open, not the session.
             if let text, !text.isEmpty {
                 CopyButton(text: text, help: "Copiar \(tab.rawValue.lowercased())")
             }
         }
-        .padding(3)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardRadius)
-                .strokeBorder(Theme.cardBorder, lineWidth: 1))
     }
 
     // MARK: Content
@@ -153,13 +174,19 @@ struct SessionDetailView: View {
                 Text(tab == .transcript ? "Sin transcripción" : "Sin resumen")
                     .font(Theme.bodyFont)
                     .foregroundStyle(Theme.textSecondary)
-                Text(session.hasAudio
-                    ? "Usa el botón de recargar para generarla."
-                    : "Esta grabación no tiene audio.")
+                Text(placeholderHint)
                     .font(Theme.captionFont)
                     .foregroundStyle(Theme.textTertiary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var placeholderHint: String {
+        if !session.hasAudio { return "Esta grabación no tiene audio." }
+        if tab == .summary, session.summarizableTranscriptURL != nil {
+            return "Pulsa Resumir para generarlo."
+        }
+        return "Usa el botón de recargar para generarla."
     }
 }

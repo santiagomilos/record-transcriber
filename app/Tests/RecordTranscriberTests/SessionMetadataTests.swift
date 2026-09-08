@@ -46,6 +46,26 @@ private func temporaryFolder() throws -> URL {
                                                                  segments: 0))
 }
 
+@Test func roundTripsTheSourceNameOfAnImport() throws {
+    let folder = try temporaryFolder()
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    try SessionMetadata(sourceName: "PTT-20260901-WA0003.opus").save(to: folder)
+
+    let written = try String(contentsOf: folder.appendingPathComponent("meta.json"), encoding: .utf8)
+    #expect(written == """
+    {
+      "durationSeconds" : 0,
+      "segments" : 0,
+      "sourceName" : "PTT-20260901-WA0003.opus"
+    }
+    """)
+    #expect(SessionMetadata.load(from: folder) == SessionMetadata(durationSeconds: 0,
+                                                                 language: nil,
+                                                                 segments: 0,
+                                                                 sourceName: "PTT-20260901-WA0003.opus"))
+}
+
 @Test func treatsAMissingSidecarAsNoMetadata() throws {
     let folder = try temporaryFolder()
     defer { try? FileManager.default.removeItem(at: folder) }

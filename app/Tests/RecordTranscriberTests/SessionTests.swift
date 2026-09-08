@@ -129,3 +129,89 @@ private func statusFolder(containing files: [String]) throws -> URL {
 
     #expect(Session(folder: folder).status == .empty)
 }
+
+// MARK: Audio resolution
+
+@Test func resolvesTheRecorderFileWhenPresent() {
+    #expect(Session.audioFile(among: ["PTT.opus", "audio.opus", "meta.json"]) == "audio.opus")
+}
+
+@Test func resolvesAnImportedFileByExcludingWhatTheAppDerived() {
+    let contents = [
+        "meta.json",
+        "transcript.txt",
+        "transcript.srt",
+        "transcript.summary.md",
+        "transcript.16k.wav",
+        ".DS_Store",
+        "PTT-20260901-WA0003.opus",
+    ]
+    #expect(Session.audioFile(among: contents) == "PTT-20260901-WA0003.opus")
+}
+
+@Test func ignoresAPartialCaptureAsAudio() {
+    #expect(Session.audioFile(among: ["audio.opus.part"]) == "audio.opus")
+}
+
+@Test func fallsBackToTheRecorderNameForAnEmptyFolder() {
+    #expect(Session.audioFile(among: []) == "audio.opus")
+}
+
+@Test func picksTheFirstFileByNameWhenSeveralQualify() {
+    #expect(Session.audioFile(among: ["b.m4a", "a.mp3"]) == "a.mp3")
+}
+
+@Test func reportsAnImportedRecordingAsNeedingTranscription() throws {
+    let folder = try statusFolder(containing: ["PTT-20260901-WA0003.opus", "meta.json"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    let session = Session(folder: folder)
+
+    #expect(session.hasAudio)
+    #expect(session.audioURL.lastPathComponent == "PTT-20260901-WA0003.opus")
+    #expect(session.status == .needsTranscription)
+}
+
+@Test func prefersSubtitlesAsTheTranscriptToSummarize() throws {
+    let folder = try statusFolder(containing: ["audio.opus", "transcript.txt", "transcript.srt"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).summarizableTranscriptURL?.lastPathComponent == "transcript.srt")
+}
+
+@Test func fallsBackToPlainTextWhenThereAreNoSubtitles() throws {
+    let folder = try statusFolder(containing: ["audio.opus", "transcript.txt"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).summarizableTranscriptURL?.lastPathComponent == "transcript.txt")
+}
+
+@Test func hasNothingToSummarizeBeforeTranscription() throws {
+    let folder = try statusFolder(containing: ["audio.opus"])
+    defer { try? FileManager.default.removeItem(at: folder) }
+
+    #expect(Session(folder: folder).summarizableTranscriptURL == nil)
+}
+
+// MARK: Names
+
+@Test func labelsADateNamedFolderByItsDate() {
+    let session = Session(folder: URL(fileURLWithPath: "/recordings/2026-09-01 0314"))
+    #expect(session.displayName == SessionDateFormat.label(for: startedAt))
+}
+
+@Test func labelsASuffixedDateFolderByItsDate() {
+    let session = Session(folder: URL(fileURLWithPath: "/recordings/2026-09-01 0314 2"))
+    #expect(Session.folderName(for: session.startedAt) == "2026-09-01 0314")
+    #expect(session.displayName == SessionDateFormat.label(for: startedAt))
+}
+
+@Test func showsAnImportedFolderNameAsItIs() {
+    let session = Session(folder: URL(fileURLWithPath: "/recordings/Archivos/PTT-20260901-WA0003"))
+    #expect(session.displayName == "PTT-20260901-WA0003")
+}
+
+@Test func showsANameEndingInANumberAsItIs() {
+    let session = Session(folder: URL(fileURLWithPath: "/recordings/Archivos/Reunión 2"))
+    #expect(session.displayName == "Reunión 2")
+}

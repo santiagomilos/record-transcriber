@@ -2,7 +2,7 @@ import Foundation
 
 /// SessionMetadata is what a session folder cannot say by listing its files:
 /// how long the recording is, what language it turned out to be, how many
-/// segments the transcript has.
+/// segments the transcript has, and for an import, what the file was called.
 ///
 /// It is written as `meta.json` inside the session folder rather than kept in a
 /// database, so a session stays self-contained: copy the folder and the metadata
@@ -12,13 +12,16 @@ import Foundation
 struct SessionMetadata: Codable, Equatable, Hashable {
     static let fileName = "meta.json"
 
-    /// durationSeconds is the recorded length, taken from the recorder's own
-    /// clock. It stays zero for a session imported from a file, where nothing
-    /// measured it.
+    /// durationSeconds is the recorded length. The recorder's own clock writes
+    /// it for a recording; an import gets it from the pipeline's `input` event,
+    /// so it stays zero until the file has been transcribed once.
     var durationSeconds: Double = 0
     /// language is what whisper detected, nil until the session is transcribed.
     var language: String?
     var segments: Int = 0
+    /// sourceName is the name, extension included, of the file an import was
+    /// copied from. Nil for a recording made by the app.
+    var sourceName: String?
 
     /// load reads a session's sidecar. A missing or malformed file is nil rather
     /// than an error: metadata nobody wrote is not a broken session, it is a
