@@ -44,8 +44,17 @@ every time the panel opens. Sessions recorded before it show no length.
 
 The window lists those sessions with their date, length and status, and shows
 what each produced — the transcript as text, the summary rendered as Markdown.
-Dragging an existing audio or video file onto it runs that file through the same
-pipeline.
+
+Audio that was not recorded here — a WhatsApp voice note, an `.m4a`, a video —
+goes through the same pipeline from the window's second list, "Archivos". Pick
+files with the "Transcribir archivo…" button (in the window or in the menu bar
+panel) or drag them onto the window; several at once are transcribed one after
+another, and the queue can be cancelled. Each file is copied into
+`~/Documents/Grabaciones/Archivos/<name>/` so the folder stays self-contained,
+and is named after the file (or after the import time, a preference); any item
+can be renamed later, which renames its folder. An imported file gets a
+transcript only. "Resumir" in the detail view generates the summary on demand by
+running the CLI over the transcript, which takes seconds rather than a decode.
 
 The panel and the window use a fixed dark palette instead of following the system
 appearance, which is deliberate: the app looks the same everywhere, at the cost of
@@ -146,9 +155,10 @@ make test
 
 Go covers the whisper JSON parser, the three output formats, argument parsing,
 the progress-line parser and both event emitters. Swift covers the event decoder
-on the other side of that boundary, session naming and listing, the metadata
-sidecar, the status a session derives from its files, the date labels the rows
-show, and the mapping from preferences to CLI flags. None of them need ffmpeg,
+on the other side of that boundary, session naming, listing and renaming, the
+file a session's audio resolves to, the metadata sidecar, the status a session
+derives from its files, the date labels the rows show, how imports are named,
+and the mapping from preferences to CLI flags. None of them need ffmpeg,
 whisper-cli, a model, audio hardware, or the network.
 
 `make test-swift` passes extra flags because swift-testing ships inside the

@@ -62,6 +62,27 @@ Verified on the same 16-minute Spanish recording as Phase 1: `auto` surfaced the
 the meeting left open and the fact that it ended without agreement, both of which the old `minuta`
 had flattened into "Temas tratados".
 
+## Phase 2.6: Files that were not recorded here — shipped
+
+The CLI always accepted any audio or video file; the app only recorded. Dragging a file onto the
+window did exist, and produced a broken session: the copy kept its own name while the app looked
+for `audio.opus`, so the row read "sin audio" and could never be transcribed again.
+
+The app now has a second list, "Archivos", for WhatsApp voice notes and anything else that arrives
+as a file (`agent-os/specs/2026-09-07-1909-external-files-transcription/`). Files are picked with
+a button in the window or in the panel, or dropped onto the window, several at a time, and are
+transcribed one after another. Each is copied into `Archivos/<name>/` under the library folder,
+named after the file or after the import time, and can be renamed, which renames the folder.
+
+An import gets a transcript only. A summary is one click away and reuses what Phase 2.5 built: the
+CLI is run again with the transcript as input, so it takes seconds and no decode. A voice note
+rarely needs minutes, and every summary is a `claude` call.
+
+Two things came out of the repair. A session now resolves its audio from the folder's contents
+rather than assuming `audio.opus`, and the pipeline's `input` event, which carries the file's
+duration and which the app had been discarding, is kept, so imports show a length. The Go CLI is
+unchanged; "batch mode" for the command line stays below.
+
 ## Phase 3: Later
 
 - **Speaker diarization** — label who said what. The viable local path is `sherpa-onnx` running pyannote-segmentation-3.0 plus CAM++ as ONNX models, which needs no Python runtime.
