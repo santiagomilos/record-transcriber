@@ -9,7 +9,17 @@ import Foundation
 enum ToolPaths {
     /// fallbackPaths are used when the login shell cannot be asked, and are
     /// appended to its PATH in every case.
-    static let fallbackPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+    ///
+    /// `~/.local/bin` is where Claude Code's native installer puts `claude`,
+    /// and it is usually added to PATH in `.zshrc`, which a login shell run
+    /// non-interactively never reads. Asking the shell alone missed it.
+    static let fallbackPaths = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        NSHomeDirectory() + "/.local/bin",
+        "/usr/bin",
+        "/bin",
+    ]
 
     /// searchPaths is the login shell's PATH followed by the fallbacks.
     ///

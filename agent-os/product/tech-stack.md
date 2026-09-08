@@ -32,6 +32,8 @@ N/A — the tool reads a file and writes files. The only persistent state is the
 
 **Configuration:** the CLI reads no config file and no environment variables. The app stores its preferences — library folder, language, output formats, summary kind, model — in UserDefaults, and passes them to the CLI as flags. Summaries inherit whatever account and model the installed Claude Code is already signed in with.
 
-**PATH:** an app launched from the Finder inherits `/usr/bin:/bin:/usr/sbin:/sbin`, so it finds none of these tools. The app builds the PATH for its subprocesses by asking the user's login shell (`$SHELL -l -c 'printf %s "$PATH"'`) once, and appending the Homebrew prefixes as a fallback.
+**PATH:** an app launched from the Finder inherits `/usr/bin:/bin:/usr/sbin:/sbin`, so it finds none of these tools. The app builds the PATH for its subprocesses by asking the user's login shell (`$SHELL -l -c 'printf %s "$PATH"'`) once, and appending the Homebrew prefixes and `~/.local/bin` as a fallback.
 
 Asking the shell rather than hardcoding a list is not defensive coding: Claude Code installs `claude` under `~/.local/bin`, nowhere near Homebrew's prefix. A hardcoded list found ffmpeg and whisper-cli but not `claude`, and because the CLI checks for `claude` before transcribing, the whole run aborted having written nothing.
+
+The shell alone is not enough either, which is why `~/.local/bin` is also in the fallback list: a login shell run non-interactively reads `.zprofile` but not `.zshrc`, and the native `claude` installer adds its directory to PATH in `.zshrc`. On this machine the app lost `claude` the day the install moved there.
