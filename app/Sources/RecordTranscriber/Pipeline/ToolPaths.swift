@@ -94,7 +94,7 @@ struct Tool: Identifiable, Hashable {
     static let ffmpeg = Tool(binary: "ffmpeg", installCommand: "brew install ffmpeg", required: true)
     static let ffprobe = Tool(binary: "ffprobe", installCommand: "brew install ffmpeg", required: true)
     static let whisper = Tool(binary: "whisper-cli", installCommand: "brew install whisper-cpp", required: true)
-    static let claude = Tool(binary: "claude", installCommand: "npm install -g @anthropic-ai/claude-code", required: false)
+    static let claude = Tool(binary: "claude", installCommand: "curl -fsSL https://claude.ai/install.sh | bash", required: false)
 
     /// all is checked at launch, matching the CLI's fail-fast ordering: a
     /// missing dependency is reported before any recording is made, not after.
