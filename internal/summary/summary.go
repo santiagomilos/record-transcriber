@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/santi/record-transcriber/internal/asr"
+	"github.com/santiagomilos/record-transcriber/internal/asr"
 )
 
 // BinaryName is the Claude Code executable this package drives. Going through

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/santi/record-transcriber/internal/asr"
+	"github.com/santiagomilos/record-transcriber/internal/asr"
 )
 
 // sample spans the one-minute and one-hour boundaries so the timestamp carry

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/santi/record-transcriber/internal/summary"
+	"github.com/santiagomilos/record-transcriber/internal/summary"
 )
 
 func TestParseFormatsAcceptsAllThreeAndKeepsOrder(t *testing.T) {

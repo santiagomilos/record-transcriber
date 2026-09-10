@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/santi/record-transcriber/internal/asr"
+	"github.com/santiagomilos/record-transcriber/internal/asr"
 )
 
 // WriteText writes one segment per line, without timestamps.

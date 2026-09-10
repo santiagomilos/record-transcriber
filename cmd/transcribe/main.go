@@ -15,12 +15,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/santi/record-transcriber/internal/asr"
-	"github.com/santi/record-transcriber/internal/format"
-	"github.com/santi/record-transcriber/internal/media"
-	"github.com/santi/record-transcriber/internal/modelstore"
-	"github.com/santi/record-transcriber/internal/progress"
-	"github.com/santi/record-transcriber/internal/summary"
+	"github.com/santiagomilos/record-transcriber/internal/asr"
+	"github.com/santiagomilos/record-transcriber/internal/format"
+	"github.com/santiagomilos/record-transcriber/internal/media"
+	"github.com/santiagomilos/record-transcriber/internal/modelstore"
+	"github.com/santiagomilos/record-transcriber/internal/progress"
+	"github.com/santiagomilos/record-transcriber/internal/summary"
 )
 
 type config struct {
