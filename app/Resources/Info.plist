@@ -14,10 +14,12 @@
 	<string>APPL</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<!-- Placeholders. The version lives in the git tag: `make app` stamps
+	     VERSION and the commit count into the bundle's copy before signing. -->
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.4</string>
 	<!-- The app lives in the menu bar: no Dock icon, no ⌘Tab entry. The cost is
