@@ -8,14 +8,69 @@ the command-line tool it drives, for recordings that already exist.
 
 ## Install
 
+On a Mac with Apple Silicon and macOS 14.4 or later, open Terminal and run:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/santiagomilos/record-transcriber/main/install.sh)"
+```
+
+The script installs Homebrew if it is missing (it asks for your password),
+then `ffmpeg` and `whisper-cpp`, downloads the latest release from this
+repository's Releases page, puts `Record Transcriber.app` in `/Applications`
+and opens it. Running it again updates the app in place. It edits no shell
+profile and signs in to nothing.
+
+Summaries need [Claude Code](https://code.claude.com/docs/en/setup) installed
+and signed in, which the script checks but does not install: it prints the
+install command (`curl -fsSL https://claude.ai/install.sh | bash`) and asks you
+to run `claude` once to sign in. Claude Code 2.1 or newer is required, tested
+against 2.1.267; `claude --help` must list `--restricted`. Without it the app
+records and transcribes, and the summary button stays disabled.
+
+Models are downloaded on the first transcription into
+`~/Library/Caches/record-transcriber/models/` on macOS (`~/.cache/...` on
+Linux): the transcription model, `large-v3-turbo` at 1.6 GB, plus a small
+Silero voice-activity model used to skip silence. The first transcription
+therefore takes minutes longer than the rest.
+
+To install by hand instead, download `Record-Transcriber-arm64.zip` from the
+latest release, unzip it and drag the app into Applications. The app is
+signed ad-hoc and not notarized, so a copy downloaded with a browser carries
+the quarantine flag and macOS refuses to open it the first time. On macOS 15
+and later, open System Settings > Privacy & Security (Ajustes del Sistema >
+Privacidad y seguridad), scroll to the notice that Record Transcriber was
+blocked, click Open Anyway (Abrir igualmente) and confirm; Control-click >
+Open no longer suffices since Sequoia. On macOS 14, Control-click the app and
+choose Open once. Or remove the flag in a terminal:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Record Transcriber.app"
+```
+
+The install script does this for you, which is why the one-liner never hits
+the prompt.
+
+macOS keys the microphone and system-audio permissions to the app's signature,
+and an ad-hoc signature changes with every build, so each new version asks
+again on the first recording. If the prompt never reappears and a recording
+captures nothing, remove Record Transcriber under System Settings > Privacy &
+Security > Microphone and record again, or reset the grant:
+
+```sh
+tccutil reset Microphone com.santiagomilos.record-transcriber
+```
+
+## Build from source
+
 ```sh
 brew install ffmpeg whisper-cpp
 make            # builds bin/transcribe and "bin/Record Transcriber.app"
 ```
 
-Models are downloaded on first run into `~/Library/Caches/record-transcriber/models/`
-on macOS (`~/.cache/...` on Linux): the transcription model, `large-v3-turbo` at
-1.6 GB, plus a small Silero voice-activity model used to skip silence.
+Needs Go 1.27 and a Swift 6 toolchain (the Command Line Tools are enough; no
+Xcode project exists). A build made this way reports version `0.0.0`: the
+version lives in the git tag and is stamped into the bundle by `make dist`,
+see Release below.
 
 ## The app
 
@@ -67,7 +122,8 @@ uncompressed original.
 
 macOS asks for microphone access on the first recording. The app is signed
 ad-hoc because this project has no signing identity, and the signature changes
-whenever it is rebuilt, so `make app` may make macOS ask again.
+whenever it is rebuilt, so `make app` may make macOS ask again; see Install
+above for what to do when it stops asking.
 
 ## Use the CLI
 
@@ -169,3 +225,42 @@ they would be unnecessary.
 the app was written. It stays as a diagnostic: if a macOS update breaks system
 audio capture, `sh app/spike/build.sh && open bin/AudioSpike.app` answers whether
 the problem is Core Audio or this app.
+
+## Release
+
+Releases are built on the maintainer's machine and published as GitHub
+Releases; there is no CI. Once, install and sign in to the GitHub CLI and
+create the remote:
+
+```sh
+brew install gh && gh auth login
+gh repo create santiagomilos/record-transcriber --public --source . --remote origin --push
+```
+
+Then, for every version:
+
+```sh
+make release VERSION=0.2.0
+```
+
+`make release` refuses to run without `gh`, without an `origin`, off `main`,
+with uncommitted changes, or if the tag already exists. It then runs the tests,
+builds the app with the version stamped into its `Info.plist` (build number =
+commit count), verifies the signature and that both binaries are arm64, zips
+the bundle with `ditto` into `dist/Record-Transcriber-arm64.zip`, tags
+`v0.2.0`, pushes `main` and the tag, and creates the release with the zip
+attached and notes made from the commit subjects since the previous tag. The
+asset name never changes, which is what lets `install.sh` fetch
+`releases/latest/download/Record-Transcriber-arm64.zip` without asking the
+API.
+
+If publishing fails after the tag was pushed, rerun only the last step:
+
+```sh
+gh release create v0.2.0 --verify-tag --title "Record Transcriber 0.2.0" \
+  --notes-file dist/notes.md "dist/Record-Transcriber-arm64.zip#Record Transcriber 0.2.0 (Apple Silicon)"
+```
+
+`make dist VERSION=x.y.z` builds the zip without publishing, and
+`RECORD_TRANSCRIBER_ZIP=dist/Record-Transcriber-arm64.zip RECORD_TRANSCRIBER_DEST=/some/folder bash install.sh`
+exercises the install path against it before any release exists.

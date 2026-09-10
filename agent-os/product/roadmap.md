@@ -31,7 +31,7 @@ The UI was reworked afterwards (`agent-os/specs/2026-09-01-0419-menu-bar-panel-r
 
 That list needs a length per recording, which nothing measured before: the audio is Ogg/Opus, which AVFoundation cannot read, so the alternative was an `ffprobe` subprocess per row on every panel open. Each session now carries a `meta.json` written when the recording stops, holding the length plus the language and segment count that `transcribe -json` already reported and the app used to discard. Sessions recorded before it show no length; they are not backfilled.
 
-Not done, and deliberately: notarized distribution to other machines. The app is ad-hoc signed for personal use, which costs nothing and needs no Apple Developer Program.
+Not done, and deliberately: notarized distribution. The app is ad-hoc signed, which costs nothing and needs no Apple Developer Program; Phase 2.7 ships it to other machines without notarizing it.
 
 ## Phase 2.5: The summary got a design — shipped
 
@@ -82,6 +82,35 @@ Two things came out of the repair. A session now resolves its audio from the fol
 rather than assuming `audio.opus`, and the pipeline's `input` event, which carries the file's
 duration and which the app had been discarding, is kept, so imports show a length. The Go CLI is
 unchanged; "batch mode" for the command line stays below.
+
+## Phase 2.7: Installable on another Mac — shipped
+
+Until here the app existed only on the machine that built it: `bin/` ignored by git, a bundle
+signed ad-hoc by hand, no remote, no tag, no artifact. The occasion was handing it to a friend on
+an Apple Silicon Mac who does not build software (`agent-os/specs/2026-09-09-2354-installable-app/`).
+
+The friend runs one command. `install.sh` checks macOS 14.4 and Apple Silicon, installs Homebrew
+if it is missing, installs `ffmpeg` and `whisper-cpp`, downloads the latest GitHub Release, replaces
+the app in `/Applications`, strips the quarantine flag and opens it. It reports whether Claude Code
+is installed, signed in and recent enough, and does nothing about it: summaries are optional and
+signing in opens a browser, which belongs to the user.
+
+The maintainer runs `make release VERSION=x.y.z`. It refuses a dirty tree, a branch other than
+`main` or an existing tag, then tests, stamps the version from the tag into the bundle (the source
+plist carries placeholders, so nothing has to be bumped and committed), verifies the signature and
+the arm64 slices, zips with `ditto`, tags, pushes and publishes with notes from the commit
+subjects. One fixed asset name is what lets the installer fetch `releases/latest/download/` without
+touching the API.
+
+Decided along the way, each against its alternative. A prebuilt app rather than a build from
+source, because the friend has neither Go nor Swift. A public repository and a locally built
+release rather than CI, because the binary that ships is the one already tested here and there is
+no runner to debug where its Swift differs from this machine's. Ad-hoc signing kept and no
+notarization, so Gatekeeper on a browser-downloaded copy and the microphone prompt returning after
+every build are documented rather than fixed; both need a Developer ID. Apple Silicon only, no
+universal binary. And no choice of LLM provider, which the request had asked for on the assumption
+that the friend used Copilot: they use Claude Code too, so `claude --print` stays the one backend.
+The Go module was renamed to the GitHub owner before the repository went public.
 
 ## Phase 3: Later
 
