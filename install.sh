@@ -74,7 +74,7 @@ ensure_formulae() {
 		if brew list --versions "$formula" >/dev/null 2>&1; then
 			say "$formula ya está instalado."
 		else
-			say "Instalando $formula…"
+			say "Instalando $formula..."
 			brew install "$formula"
 		fi
 	done
@@ -111,7 +111,7 @@ download_app() {
 		say "Usando $RECORD_TRANSCRIBER_ZIP"
 		cp "$RECORD_TRANSCRIBER_ZIP" "$zip" 2>/dev/null || die "No existe $RECORD_TRANSCRIBER_ZIP."
 	else
-		say "Descargando la última versión de $APP_NAME…"
+		say "Descargando la última versión de $APP_NAME..."
 		# -L: GitHub answers with a redirect to objects.githubusercontent.com.
 		curl -fsSL --retry 3 -o "$zip" "https://github.com/$REPO/releases/latest/download/$ASSET" \
 			|| die "No se pudo descargar la última versión."
@@ -139,7 +139,7 @@ install_app() {
 
 	# `quit app` on an app that is not running can launch it, hence the guard.
 	if pgrep -xq RecordTranscriber; then
-		say "Cerrando la copia que está abierta…"
+		say "Cerrando la copia que está abierta..."
 		osascript -e "quit app \"$APP_NAME\"" >/dev/null 2>&1 || true
 		local i
 		for i in 1 2 3 4 5; do
