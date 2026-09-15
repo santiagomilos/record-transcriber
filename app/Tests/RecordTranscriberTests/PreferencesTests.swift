@@ -31,6 +31,48 @@ private let importedAt: Date = {
     #expect(preferences.model == "large-v3-turbo")
     #expect(preferences.libraryFolder.lastPathComponent == "Grabaciones")
     #expect(preferences.importNaming == .fileName)
+    #expect(preferences.summaryFontSize == 12)
+}
+
+@Test func stepsTheSummaryFontSizeAndKeepsItAcrossARelaunch() {
+    let name = "record-transcriber-tests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+
+    let first = Preferences(defaults: defaults)
+    first.increaseSummaryFontSize()
+    first.increaseSummaryFontSize()
+    first.decreaseSummaryFontSize()
+
+    let second = Preferences(defaults: defaults)
+    #expect(second.summaryFontSize == 13)
+}
+
+@Test func stopsTheSummaryFontSizeAtTheLargest() {
+    let preferences = isolatedPreferences()
+    preferences.summaryFontSize = 24
+
+    preferences.increaseSummaryFontSize()
+
+    #expect(preferences.summaryFontSize == 24)
+}
+
+@Test func stopsTheSummaryFontSizeAtTheSmallest() {
+    let preferences = isolatedPreferences()
+    preferences.summaryFontSize = 10
+
+    preferences.decreaseSummaryFontSize()
+
+    #expect(preferences.summaryFontSize == 10)
+}
+
+@Test func clampsAStoredSummaryFontSizeOutsideTheRange() {
+    let name = "record-transcriber-tests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+    defaults.set(40.0, forKey: "summaryFontSize")
+
+    let preferences = Preferences(defaults: defaults)
+
+    #expect(preferences.summaryFontSize == 24)
 }
 
 @Test func persistsTheImportNamingAcrossARelaunch() {

@@ -16,6 +16,7 @@ final class Preferences {
         static let model = "model"
         static let summaryKindMigratedToAuto = "summaryKindMigratedToAuto"
         static let importNaming = "importNaming"
+        static let summaryFontSize = "summaryFontSize"
     }
 
     /// ImportNaming is how an imported file's session is named by default:
@@ -44,6 +45,11 @@ final class Preferences {
     static let summaryKinds = ["none", "auto", "resumen", "minuta"]
     static let availableFormats = ["txt", "srt", "vtt"]
     static let defaultModel = "large-v3-turbo"
+    /// summaryFontSizes is the range the summary's size buttons step through,
+    /// one point at a time. The default is the size the summary had before it
+    /// could be changed.
+    static let summaryFontSizes: ClosedRange<Double> = 10...24
+    static let defaultSummaryFontSize: Double = 12
 
     /// summaryKindNames are what the picker and the progress label show. The
     /// stored values stay as `cmd/transcribe` spells them.
@@ -98,6 +104,20 @@ final class Preferences {
         didSet { defaults.set(importNaming.rawValue, forKey: Key.importNaming) }
     }
 
+    /// summaryFontSize is the body size of the summary tab, in points, for every
+    /// session. Headings scale with it.
+    var summaryFontSize: Double {
+        didSet { defaults.set(summaryFontSize, forKey: Key.summaryFontSize) }
+    }
+
+    func increaseSummaryFontSize() {
+        summaryFontSize = min(summaryFontSize + 1, Preferences.summaryFontSizes.upperBound)
+    }
+
+    func decreaseSummaryFontSize() {
+        summaryFontSize = max(summaryFontSize - 1, Preferences.summaryFontSizes.lowerBound)
+    }
+
     /// onDemandSummaryKind is the kind a summary generated on request uses.
     /// `none` means "not with every transcription", which is exactly what an
     /// explicit request is not, and the CLI rejects it with a transcript input,
@@ -121,6 +141,13 @@ final class Preferences {
         model = defaults.string(forKey: Key.model) ?? Preferences.defaultModel
         importNaming = defaults.string(forKey: Key.importNaming)
             .flatMap(ImportNaming.init(rawValue:)) ?? .fileName
+        // `double(forKey:)` reads a missing key as 0, which would clamp to the
+        // smallest size instead of the default.
+        let storedSize = defaults.object(forKey: Key.summaryFontSize) == nil
+            ? Preferences.defaultSummaryFontSize
+            : defaults.double(forKey: Key.summaryFontSize)
+        summaryFontSize = min(max(storedSize, Preferences.summaryFontSizes.lowerBound),
+                              Preferences.summaryFontSizes.upperBound)
 
         // `minuta` was the default before `auto` existed, so a stored `minuta`
         // is almost always the old default rather than a choice. Move it once
