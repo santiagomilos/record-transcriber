@@ -3,57 +3,11 @@ import SwiftUI
 /// MarkdownText renders the summary the way `claude --print` writes it:
 /// headings, bullets and paragraphs.
 ///
-/// SwiftUI's `Text(AttributedString)` applies inline emphasis but ignores the
-/// block structure, so `## Acuerdos` would read as literal hashes. The blocks
-/// are split here and only the inline markup inside each line is handed to
+/// `AttributedString(markdown:)` applies inline emphasis but ignores the block
+/// structure, so `## Acuerdos` would read as literal hashes. The blocks are
+/// split here and only the inline markup inside each line is handed to
 /// `AttributedString`.
-struct MarkdownText: View {
-    let markdown: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            ForEach(Array(Block.parse(markdown).enumerated()), id: \.offset) { _, block in
-                view(for: block)
-            }
-        }
-        .textSelection(.enabled)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private func view(for block: Block) -> some View {
-        switch block {
-        case let .heading(level, text):
-            Text(inline(text))
-                .font(.system(size: level == 1 ? 17 : (level == 2 ? 14 : 12.5), weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .padding(.top, level == 1 ? 0 : Theme.Space.sm)
-        case let .bullet(marker, text):
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
-                Text(marker)
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textTertiary)
-                Text(inline(text))
-                    .font(Theme.bodyFont)
-                    .foregroundStyle(Theme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, Theme.Space.sm)
-        case let .paragraph(text):
-            Text(inline(text))
-                .font(Theme.bodyFont)
-                .foregroundStyle(Theme.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// inline parses one line's emphasis, links and code spans. Markdown the
-    /// parser rejects is shown as written rather than dropped.
-    private func inline(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-    }
-
+enum MarkdownText {
     /// attributedString renders the summary as one string for a text view, with
     /// the body at `fontSize` and headings keeping their proportion to it.
     ///
@@ -99,7 +53,8 @@ struct MarkdownText: View {
     /// inline renders one line's emphasis, code spans and links in AppKit
     /// attributes. `NSAttributedString(AttributedString)` keeps the parsed
     /// presentation intents, but a text view draws them as plain text, so each
-    /// run's font is chosen here.
+    /// run's font is chosen here. Markdown the parser rejects is shown as
+    /// written rather than dropped.
     private static func inline(_ text: String, font: NSFont, color: NSColor,
                                paragraph: NSParagraphStyle) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(

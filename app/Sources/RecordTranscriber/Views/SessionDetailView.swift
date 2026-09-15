@@ -16,6 +16,17 @@ struct SessionDetailView: View {
 
     @State private var tab: Tab
 
+    /// HighlightsSource is what the loaded marks belong to: the session, and the
+    /// summary text when the summary tab is showing one.
+    private struct HighlightsSource: Equatable {
+        let folder: URL
+        let summary: String?
+    }
+
+    /// loadedHighlights keeps its source beside it so the view never draws one
+    /// summary's marks over another while the new ones are loading.
+    @State private var loadedHighlights: (source: HighlightsSource, highlights: SummaryHighlights)?
+
     init(model: AppModel, session: Session, onRename: @escaping (Session) -> Void) {
         self.model = model
         self.session = session
@@ -51,6 +62,9 @@ struct SessionDetailView: View {
                 .padding(.bottom, Theme.Space.md)
 
             content(text: text)
+        }
+        .task(id: highlightsSource(for: text)) {
+            loadHighlights(from: highlightsSource(for: text))
         }
     }
 
@@ -135,6 +149,19 @@ struct SessionDetailView: View {
             // The button sits with the tabs rather than in the header because it
             // copies the tab that is open, not the session.
             if let text, !text.isEmpty {
+                if tab == .summary {
+                    IconButton(icon: "textformat.size.smaller", help: "Reducir texto") {
+                        model.preferences.decreaseSummaryFontSize()
+                    }
+                    .keyboardShortcut("-")
+                    .disabled(model.preferences.summaryFontSize <= Preferences.summaryFontSizes.lowerBound)
+
+                    IconButton(icon: "textformat.size.larger", help: "Aumentar texto") {
+                        model.preferences.increaseSummaryFontSize()
+                    }
+                    .keyboardShortcut("+")
+                    .disabled(model.preferences.summaryFontSize >= Preferences.summaryFontSizes.upperBound)
+                }
                 CopyButton(text: text, help: "Copiar \(tab.rawValue.lowercased())")
             }
         }
@@ -144,23 +171,59 @@ struct SessionDetailView: View {
 
     @ViewBuilder private func content(text: String?) -> some View {
         if let text, !text.isEmpty {
-            ScrollView {
-                Group {
-                    if tab == .summary {
-                        MarkdownText(markdown: text)
-                    } else {
-                        Text(text)
-                            .font(Theme.bodyFont)
-                            .foregroundStyle(Theme.textPrimary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+            if tab == .summary {
+                if let loaded = loadedHighlights, loaded.source == highlightsSource(for: text) {
+                    SummaryTextView(markdown: text,
+                                    fontSize: model.preferences.summaryFontSize,
+                                    highlights: loaded.highlights,
+                                    onChange: saveHighlights)
+                } else {
+                    Spacer()
                 }
-                .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
-                .padding(.bottom, Theme.Space.lg)
+            } else {
+                ScrollView {
+                    Text(text)
+                        .font(Theme.bodyFont)
+                        .foregroundStyle(Theme.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
+                        .padding(.bottom, Theme.Space.lg)
+                }
             }
         } else {
             placeholder
+        }
+    }
+
+    // MARK: Highlights
+
+    private func highlightsSource(for text: String?) -> HighlightsSource {
+        HighlightsSource(folder: session.folder, summary: tab == .summary ? text : nil)
+    }
+
+    /// loadHighlights reads the marks for the summary on screen. The offsets
+    /// point into the rendered text, which is the same at every font size, so
+    /// any size renders the string to check them against.
+    private func loadHighlights(from source: HighlightsSource) {
+        guard let summary = source.summary, !summary.isEmpty else {
+            loadedHighlights = nil
+            return
+        }
+        let rendered = MarkdownText.attributedString(markdown: summary,
+                                                     fontSize: Preferences.defaultSummaryFontSize).string
+        loadedHighlights = (source, SummaryHighlights.load(from: session.highlightsURL,
+                                                           summary: summary,
+                                                           rendered: rendered))
+    }
+
+    private func saveHighlights(_ highlights: SummaryHighlights) {
+        guard let loaded = loadedHighlights else { return }
+        do {
+            try highlights.save(to: session.highlightsURL)
+            loadedHighlights = (loaded.source, highlights)
+        } catch {
+            model.failure = "No se pudo guardar el resaltado: \(error.localizedDescription)"
         }
     }
 

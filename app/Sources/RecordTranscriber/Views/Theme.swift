@@ -39,6 +39,21 @@ enum Theme {
     static let warning = Color(red: 0.910, green: 0.639, blue: 0.239)
     static let success = Color(red: 0.290, green: 0.769, blue: 0.494)
 
+    /// selection is the background of selected text in the summary. The system
+    /// selection color is drawn for a light page and disappears on this one.
+    static let selection = accent.opacity(0.35)
+
+    /// highlight is the ink behind a passage the user marked. The opacity keeps
+    /// `textPrimary` readable over every color on the dark panel.
+    static func highlight(_ color: HighlightColor) -> Color {
+        switch color {
+        case .yellow: return Color(red: 0.965, green: 0.827, blue: 0.294).opacity(0.40)
+        case .green: return Color(red: 0.290, green: 0.769, blue: 0.494).opacity(0.40)
+        case .pink: return Color(red: 0.941, green: 0.412, blue: 0.635).opacity(0.40)
+        case .blue: return Color(red: 0.353, green: 0.588, blue: 0.941).opacity(0.40)
+        }
+    }
+
     /// brandGradient is the reference's own mark gradient, coral running into
     /// magenta. It belongs to the header mark and nothing else: a gradient that
     /// appears twice stops reading as an identity.
