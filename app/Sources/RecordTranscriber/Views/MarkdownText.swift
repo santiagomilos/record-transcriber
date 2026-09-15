@@ -54,6 +54,84 @@ struct MarkdownText: View {
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
+    /// attributedString renders the summary as one string for a text view, with
+    /// the body at `fontSize` and headings keeping their proportion to it.
+    ///
+    /// Blocks are separated by a single newline and a bullet renders as its
+    /// marker, a tab and the item. Saved highlights are offsets into this
+    /// string, so a change to what it contains drops the marks it moves.
+    static func attributedString(markdown: String, fontSize: CGFloat) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let primary = NSColor(Theme.textPrimary)
+        let body = NSFont.systemFont(ofSize: fontSize)
+
+        for (index, block) in Block.parse(markdown).enumerated() {
+            if index > 0 { result.append(NSAttributedString(string: "\n")) }
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.paragraphSpacing = Theme.Space.sm
+
+            switch block {
+            case let .heading(level, text):
+                let size = fontSize * (level == 1 ? 17 : (level == 2 ? 14 : 12.5)) / 12
+                if level > 1, index > 0 { paragraph.paragraphSpacingBefore = Theme.Space.sm }
+                result.append(inline(text, font: .systemFont(ofSize: size, weight: .semibold),
+                                     color: primary, paragraph: paragraph))
+            case let .bullet(marker, text):
+                // The tab stop is where wrapped lines of the item start, so they
+                // align under the text rather than under the marker.
+                let indent = Theme.Space.sm + fontSize * 1.8
+                paragraph.firstLineHeadIndent = Theme.Space.sm
+                paragraph.headIndent = indent
+                paragraph.tabStops = [NSTextTab(textAlignment: .left, location: indent)]
+                result.append(NSAttributedString(string: "\(marker)\t", attributes: [
+                    .font: body,
+                    .foregroundColor: NSColor(Theme.textTertiary),
+                    .paragraphStyle: paragraph,
+                ]))
+                result.append(inline(text, font: body, color: primary, paragraph: paragraph))
+            case let .paragraph(text):
+                result.append(inline(text, font: body, color: primary, paragraph: paragraph))
+            }
+        }
+        return result
+    }
+
+    /// inline renders one line's emphasis, code spans and links in AppKit
+    /// attributes. `NSAttributedString(AttributedString)` keeps the parsed
+    /// presentation intents, but a text view draws them as plain text, so each
+    /// run's font is chosen here.
+    private static func inline(_ text: String, font: NSFont, color: NSColor,
+                               paragraph: NSParagraphStyle) -> NSAttributedString {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        let parsed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+
+        let result = NSMutableAttributedString()
+        for run in parsed.runs {
+            var runFont = font
+            if let intent = run.inlinePresentationIntent {
+                if intent.contains(.code) {
+                    runFont = .monospacedSystemFont(ofSize: font.pointSize, weight: .regular)
+                }
+                if intent.contains(.stronglyEmphasized) {
+                    runFont = NSFontManager.shared.convert(runFont, toHaveTrait: .boldFontMask)
+                }
+                if intent.contains(.emphasized) {
+                    runFont = NSFontManager.shared.convert(runFont, toHaveTrait: .italicFontMask)
+                }
+            }
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: runFont,
+                .foregroundColor: color,
+                .paragraphStyle: paragraph,
+            ]
+            if let link = run.link { attributes[.link] = link }
+            result.append(NSAttributedString(string: String(parsed[run.range].characters),
+                                             attributes: attributes))
+        }
+        return result
+    }
+
     /// Block is one rendered unit of the summary.
     enum Block: Equatable {
         case heading(level: Int, text: String)
