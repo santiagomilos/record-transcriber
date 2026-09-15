@@ -149,6 +149,15 @@ private func statusFolder(containing files: [String]) throws -> URL {
     #expect(Session.audioFile(among: contents) == "PTT-20260901-WA0003.opus")
 }
 
+@Test func ignoresTheSummaryHighlightsAsAudio() {
+    #expect(Session.audioFile(among: ["transcript.summary.highlights.json", "voz.opus"]) == "voz.opus")
+}
+
+@Test func keepsTheSummaryHighlightsInsideTheSessionFolder() {
+    let session = Session(folder: URL(fileURLWithPath: "/recordings/2026-09-01 0314"))
+    #expect(session.highlightsURL.path == "/recordings/2026-09-01 0314/transcript.summary.highlights.json")
+}
+
 @Test func ignoresAPartialCaptureAsAudio() {
     #expect(Session.audioFile(among: ["audio.opus.part"]) == "audio.opus")
 }

@@ -48,6 +48,12 @@ struct Session: Identifiable, Hashable {
     var name: String { folder.lastPathComponent }
     var partialAudioURL: URL { folder.appendingPathComponent(Self.partialAudioFileName) }
     var summaryURL: URL { folder.appendingPathComponent("\(Self.transcriptBaseName).summary.md") }
+    /// highlightsURL is where the summary's marks are kept. It shares the
+    /// `transcript.` prefix so `audioFile(among:)` never takes it for an
+    /// imported recording.
+    var highlightsURL: URL {
+        folder.appendingPathComponent("\(Self.transcriptBaseName).summary.highlights.json")
+    }
     var transcriptBase: URL { folder.appendingPathComponent(Self.transcriptBaseName) }
 
     func transcriptURL(format: String) -> URL {
