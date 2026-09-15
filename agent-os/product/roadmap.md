@@ -112,6 +112,22 @@ universal binary. And no choice of LLM provider, which the request had asked for
 that the friend used Copilot: they use Claude Code too, so `claude --print` stays the one backend.
 The Go module was renamed to the GitHub owner before the repository went public.
 
+## Phase 2.8: Reading a summary — shipped
+
+The summary tab is where a recording ends up being read, and it was fixed at 12 pt with no way to
+mark anything (`agent-os/specs/2026-09-15-0219-summary-text-size-and-highlights/`). The text now
+grows and shrinks with A− / A+ beside the tabs or ⌘+ / ⌘−, between 10 and 24 pt, one size for
+every summary, remembered across launches. Selected text can be highlighted in yellow, green, pink
+or blue from the context menu, and unmarked the same way.
+
+Marks live in `transcript.summary.highlights.json` beside the summary, which is never rewritten, so
+a copied session folder carries them. The file records the SHA-256 of the summary it was made on:
+a summary generated again starts with no marks, whichever path regenerated it.
+
+Highlighting needs the selected range, which a SwiftUI `Text` does not expose on macOS 14.4, so the
+summary is now one attributed string in an AppKit text view. The markdown parsing is the same as
+before, and the transcript tab is unchanged.
+
 ## Phase 3: Later
 
 - **Speaker diarization** — label who said what. The viable local path is `sherpa-onnx` running pyannote-segmentation-3.0 plus CAM++ as ONNX models, which needs no Python runtime.
