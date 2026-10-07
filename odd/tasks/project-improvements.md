@@ -107,6 +107,9 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 - Design: pure `SessionSearchIndex` (name, display name, transcript, summary folded with case/diacritic-insensitive comparison) caches folded text per session URL, read lazily on the first query; `LibraryStore.reload()` invalidates it. UI is a themed field in the sidebar (not `.searchable`, which clashes with the custom dark panel) plus a "Sin resultados para «X»" state. ~216 authored lines.
 - Untested: sidebar wiring in `LibraryView`. Tradeoff: the first search after a reload reads all session files on the main thread (no existing background-load pattern in the store). No match snippet under rows.
 
+### Review of T6 (base 6172c01)
+- `gentle-ai review assess --committed-only`: medium, `review_due: false`, `under_budget` (237 lines). No later commit in this feature, so the slice stays unreviewed unless the user asks for one.
+
 ## Next step
 
 Open PRs (user decision) and diarization product questions
