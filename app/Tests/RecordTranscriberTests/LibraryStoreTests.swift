@@ -153,3 +153,16 @@ private func temporaryRoot() -> URL {
     #expect(store.sessions.isEmpty)
     #expect(store.loadProblem == nil)
 }
+
+@Test func dismissingTheLoadProblemClearsItUntilTheNextReload() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("x".utf8).write(to: root)
+    let store = LibraryStore(folder: root)
+
+    store.dismissLoadProblem()
+    #expect(store.loadProblem == nil)
+
+    store.reload()
+    #expect(store.loadProblem?.hasPrefix("No se pudo leer la biblioteca") == true)
+}

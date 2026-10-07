@@ -37,6 +37,11 @@ final class LibraryStore {
         reload()
     }
 
+    /// dismissLoadProblem hides the problem until the next `reload` finds one.
+    func dismissLoadProblem() {
+        loadProblem = nil
+    }
+
     /// reload rebuilds the session list, newest first. A missing library folder
     /// is an empty library, not an error: the folder is created on first use.
     /// Anything else that stops the folder or one of its entries from being

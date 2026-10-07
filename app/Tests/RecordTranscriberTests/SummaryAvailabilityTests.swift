@@ -44,11 +44,13 @@ Options:
     #expect(SummaryAvailability.restrictedUnsupported.reason
         == "Los resúmenes no están disponibles: esta versión de Claude Code no admite --restricted. Actualízala.")
     #expect(SummaryAvailability.helpUnreadable.reason
-        == "Los resúmenes no están disponibles: no se pudo ejecutar claude --help.")
+        == "No se pudo comprobar la versión de Claude Code (claude --help). Los resúmenes pueden fallar.")
 }
 
-@Test func onlyAnAvailableClaudeEnablesSummaries() {
+@Test func blocksSummariesOnlyWhenTheyKnowinglyCannotWork() {
     #expect(SummaryAvailability.available.allowsSummaries)
-    #expect(!SummaryAvailability.checking.allowsSummaries)
+    #expect(SummaryAvailability.checking.allowsSummaries)
+    #expect(SummaryAvailability.helpUnreadable.allowsSummaries)
     #expect(!SummaryAvailability.claudeMissing.allowsSummaries)
+    #expect(!SummaryAvailability.restrictedUnsupported.allowsSummaries)
 }

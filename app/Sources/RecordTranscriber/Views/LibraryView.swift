@@ -50,6 +50,10 @@ struct LibraryView: View {
         Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })
     }
 
+    private func dismissLoadProblem() {
+        (model.librarySection == .recordings ? model.library : model.imports).dismissLoadProblem()
+    }
+
     private func startRenaming(_ session: Session) {
         newName = session.name
         renaming = session
@@ -87,7 +91,12 @@ struct LibraryView: View {
                     }
 
                     if let problem = loadProblem {
-                        Banner(icon: "exclamationmark.triangle.fill", message: problem) {}
+                        Banner(icon: "exclamationmark.triangle.fill", message: problem) {
+                            Button("Descartar") { dismissLoadProblem() }
+                                .buttonStyle(.plain)
+                                .font(Theme.captionFont)
+                                .foregroundStyle(Theme.accent)
+                        }
                             .padding(.bottom, Theme.Space.md)
                     }
 

@@ -30,13 +30,14 @@ Enabled (session config). Runner: `make test` (`go test ./...`, `swift test --pa
 
 ## Delivery
 
-Strategy `ask-on-risk`. Forecast exceeds ~400 authored lines once search lands; ask for the chain strategy before that commit.
+Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Slices: PR1 T1–T3 + T2b (606e77b..), PR2 T4–T5, PR3 T6. T7 is research, no PR. Push and PR creation wait for the user.
 
 ## Tasks
 
 - [x] T1 Surface silent save/read failures (`AppModel.swift`, `LibraryStore.swift`, `SummaryHighlights.swift`)
 - [x] T2 Check `claude --restricted` at app start
 - [x] T3 Remove duplication in `cmd/transcribe/main.go`
+- [x] T2b Summary gate fails open when `claude --help` is unreadable or times out (review finding R4 on T2; regression vs. prior behavior)
 - [ ] T4 Remove `app/spike/`
 - [ ] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
 - [ ] T6 Search over past sessions
@@ -68,6 +69,18 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 ### T3 (cbc3421) route: delegated writer
 - Pure refactor: `go test ./cmd/...` ok before and after; `make test` ok; `go vet ./...` clean. No new test (helpers carry no logic beyond what existing tests cover).
 
+### Review of T1–T3 (base 80c0c8d, through bc4f493)
+- Assessed tier: high. Consent: granted. Four-lens native review: approved and acknowledged (lineage review-c6b1f119e7f51255). Reviewed boundary advances to bc4f493.
+- Non-blocking follow-ups worth doing:
+  - `SessionDetailView.swift:96`: the summary gate fails closed; a slow or failing `claude --help` disables summaries until a recheck, where before the button worked whenever `claude` existed.
+  - `SummaryAvailability.swift:61-66`: `readToEnd` can block past the timeout if a child of `claude` keeps the pipe open.
+  - `LibraryView.swift:89-92`: the load-problem `Banner` has a no-op dismiss.
+
+### T2b (SHA_T2B) route: delegated writer
+- RED: `make test-swift` failed to compile: `LibraryStore` has no member `dismissLoadProblem` (the `allowsSummaries` expectations for `checking`/`helpUnreadable` were written in the same run and would fail once it compiled).
+- GREEN: `make test` ok (114 Swift tests); `go vet ./...` clean.
+- Gate now blocks only `claudeMissing` and `restrictedUnsupported`; `helpUnreadable` caption reworded as a warning. `helpOutput` reads on a background queue and the 10s deadline bounds the wait (R3). Library load-problem banner dismisses via `LibraryStore.dismissLoadProblem` (R2). Untested: the timeout path and the banner wiring. ~60 authored lines.
+
 ## Next step
 
-T4.
+Ask the chain strategy (T4 alone exceeds ~400 authored lines), then T4.

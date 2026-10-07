@@ -13,7 +13,15 @@ enum SummaryAvailability: Equatable {
     case restrictedUnsupported
     case helpUnreadable
 
-    var allowsSummaries: Bool { self == .available }
+    /// allowsSummaries is false only when summaries are known not to work. A
+    /// check still running, or one that could not read `claude --help`, proves
+    /// nothing, and `claude` may well work.
+    var allowsSummaries: Bool {
+        switch self {
+        case .claudeMissing, .restrictedUnsupported: return false
+        case .checking, .available, .helpUnreadable: return true
+        }
+    }
 
     /// reason is the user-facing explanation, nil when nothing is wrong.
     var reason: String? {
@@ -25,7 +33,7 @@ enum SummaryAvailability: Equatable {
         case .restrictedUnsupported:
             return "Los resúmenes no están disponibles: esta versión de Claude Code no admite --restricted. Actualízala."
         case .helpUnreadable:
-            return "Los resúmenes no están disponibles: no se pudo ejecutar claude --help."
+            return "No se pudo comprobar la versión de Claude Code (claude --help). Los resúmenes pueden fallar."
         }
     }
 
@@ -59,13 +67,31 @@ enum SummaryAvailability: Equatable {
         process.standardError = FileHandle.nullDevice
 
         guard (try? process.run()) != nil else { return nil }
-        DispatchQueue.global().asyncAfter(deadline: .now() + helpTimeout) {
-            if process.isRunning { process.terminate() }
+
+        // The read runs off this thread so the deadline bounds it: a child of
+        // `claude` that keeps stdout open would otherwise hold `readToEnd` past
+        // the timeout even after `claude` itself was terminated.
+        let output = HelpOutput()
+        let read = DispatchGroup()
+        read.enter()
+        DispatchQueue.global().async {
+            output.data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+            read.leave()
         }
-        let data = (try? pipe.fileHandleForReading.readToEnd()) ?? Data()
+        guard read.wait(timeout: .now() + helpTimeout) == .success else {
+            process.terminate()
+            return nil
+        }
         process.waitUntilExit()
+        let data = output.data
 
         guard process.terminationStatus == 0 else { return nil }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// HelpOutput carries the bytes from the reading thread; it is written once,
+    /// before the group is left, and read only after the wait succeeded.
+    private final class HelpOutput: @unchecked Sendable {
+        var data = Data()
     }
 }
