@@ -20,6 +20,9 @@ final class LibraryStore {
     }
 
     private(set) var sessions: [Session] = []
+    /// loadProblem says why the last `reload` could not list everything, worded
+    /// for the user. Nil when the library was read in full.
+    private(set) var loadProblem: String?
 
     var folder: URL {
         didSet { reload() }
@@ -36,14 +39,39 @@ final class LibraryStore {
 
     /// reload rebuilds the session list, newest first. A missing library folder
     /// is an empty library, not an error: the folder is created on first use.
+    /// Anything else that stops the folder or one of its entries from being
+    /// read is kept in `loadProblem`, and the rest of the library is still listed.
     func reload() {
-        let contents = try? FileManager.default.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey],
-            options: [.skipsHiddenFiles])
+        loadProblem = nil
+        let contents: [URL]
+        do {
+            contents = try FileManager.default.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey],
+                options: [.skipsHiddenFiles])
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            sessions = []
+            return
+        } catch {
+            sessions = []
+            loadProblem = "No se pudo leer la biblioteca: \(error.localizedDescription)"
+            return
+        }
 
-        sessions = (contents ?? [])
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+        var unreadable: [String] = []
+        let folders = contents.filter { url in
+            do {
+                return try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
+            } catch {
+                unreadable.append(url.lastPathComponent)
+                return false
+            }
+        }
+        if !unreadable.isEmpty {
+            loadProblem = "No se pudieron leer estas carpetas de la biblioteca: \(unreadable.sorted().joined(separator: ", "))"
+        }
+
+        sessions = folders
             .filter { !excludedFolderNames.contains($0.lastPathComponent) }
             .map(Session.init(folder:))
             .sorted { $0.startedAt > $1.startedAt }

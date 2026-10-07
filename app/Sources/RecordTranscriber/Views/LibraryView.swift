@@ -61,6 +61,10 @@ struct LibraryView: View {
         model.librarySection == .recordings ? model.library.sessions : model.imports.sessions
     }
 
+    private var loadProblem: String? {
+        (model.librarySection == .recordings ? model.library : model.imports).loadProblem
+    }
+
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
@@ -79,6 +83,11 @@ struct LibraryView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if !model.missingTools.filter(\.required).isEmpty {
                         MissingToolsView(tools: model.missingTools) { model.recheckTools() }
+                            .padding(.bottom, Theme.Space.md)
+                    }
+
+                    if let problem = loadProblem {
+                        Banner(icon: "exclamationmark.triangle.fill", message: problem) {}
                             .padding(.bottom, Theme.Space.md)
                     }
 

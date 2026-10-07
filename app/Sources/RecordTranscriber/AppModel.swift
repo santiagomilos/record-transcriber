@@ -127,7 +127,7 @@ final class AppModel {
         let recorded = recorder.elapsed
         do {
             _ = try await recorder.stop()
-            try? SessionMetadata(durationSeconds: recorded).save(to: session.folder)
+            save(SessionMetadata(durationSeconds: recorded), to: session.folder)
             library.reload()
             await transcribe(session)
         } catch {
@@ -192,7 +192,18 @@ final class AppModel {
         if metadata.durationSeconds == 0 {
             metadata.durationSeconds = Double(result.durationMS) / 1000
         }
-        try? metadata.save(to: session.folder)
+        save(metadata, to: session.folder)
+    }
+
+    /// save writes a session's sidecar. A failure does not stop the pipeline:
+    /// the audio and transcript are fine without it, but the user is told the
+    /// duration and language were not kept.
+    func save(_ metadata: SessionMetadata, to folder: URL) {
+        do {
+            try metadata.save(to: folder)
+        } catch {
+            failure = "No se pudieron guardar los datos de la sesión: \(error.localizedDescription)"
+        }
     }
 
     // MARK: Imports
@@ -255,7 +266,7 @@ final class AppModel {
             try await Task.detached {
                 try FileManager.default.copyItem(at: url, to: destination)
             }.value
-            try? SessionMetadata(sourceName: url.lastPathComponent).save(to: session.folder)
+            save(SessionMetadata(sourceName: url.lastPathComponent), to: session.folder)
 
             // Listed again so the audio resolves to the file just copied.
             let imported = Session(folder: session.folder)

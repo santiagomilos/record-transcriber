@@ -135,3 +135,21 @@ private func temporaryRoot() -> URL {
     #expect(throws: LibraryError.self) { try store.rename(session, to: "Archivos") }
     #expect(store.sessions.map(\.name) == ["2026-09-01 0314"])
 }
+
+@Test func reportsALibraryFolderThatCannotBeRead() throws {
+    let root = temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("x".utf8).write(to: root)
+
+    let store = LibraryStore(folder: root)
+
+    #expect(store.sessions.isEmpty)
+    #expect(store.loadProblem?.hasPrefix("No se pudo leer la biblioteca") == true)
+}
+
+@Test func treatsAMissingLibraryFolderAsEmptyWithoutAProblem() {
+    let store = LibraryStore(folder: temporaryRoot())
+
+    #expect(store.sessions.isEmpty)
+    #expect(store.loadProblem == nil)
+}
