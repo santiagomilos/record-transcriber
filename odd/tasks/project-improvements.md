@@ -84,7 +84,7 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 ### T4 (ff73c01) route: delegated writer
 - Pure deletion: `app/spike/` (build.sh, main.swift) and the README paragraph. `make test` ok (114 Swift tests); `go vet ./...` clean. No Makefile or .gitignore reference existed. Left untouched: historical mentions in `agent-os/product/roadmap.md` and `agent-os/specs/*` (records, not instructions).
 
-### T5 (3e8ef9a Go/README, 47630f7 Swift) route: delegated writer
+### T5 (3e8ef9a Go/README, 6522ec6 Swift) route: delegated writer
 - RED (Go): `go test ./internal/summary` failed: `ParseKind("resumen")`, `("minuta")`, `(" Minuta ")` returned nil error. RED (Swift): `make test-swift` failed 3 issues: `summaryKinds` still listed the removed kinds; a stored `resumen` stayed `resumen`.
 - GREEN: `make test` ok (115 Swift tests, all Go packages); `go vet ./...` clean.
 - `auto` has its own `outlineAuto`; it never reused the removed outlines. Session `meta.json` stores no summary kind, so only the `summaryKind` preference needed a legacy path: any stored value outside `summaryKinds` loads as `auto` and is written back, so the CLI never receives a removed kind (the one-shot `summaryKindMigratedToAuto` key is gone).
