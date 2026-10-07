@@ -147,7 +147,7 @@ transcribe -summary auto reunion.srt
 | `-f`, `-format` | `txt,srt` | any of `txt`, `srt`, `vtt` |
 | `-l`, `-lang` | `auto` | ISO 639-1 code, or `auto` to detect |
 | `-m`, `-model` | `large-v3-turbo` | ggml model name |
-| `-summary` | `none` | `none`, `auto`, `resumen`, or `minuta` |
+| `-summary` | `none` | `none`, `auto`, `resumen`, `minuta`, or `requerimientos` |
 | `-threads` | number of CPUs | decoding threads |
 | `-keep-wav` | off | keep the intermediate 16 kHz WAV |
 | `-json` | off | report progress as one JSON object per line on stdout |
@@ -171,7 +171,7 @@ transcribe -json reunion.opus
 signed in — no API key. Its presence is checked before transcription starts, so
 a missing dependency fails immediately rather than after the decode.
 
-The three kinds differ in who chooses the shape. `resumen` is a paragraph plus
+The kinds differ in who chooses the shape. `resumen` is a paragraph plus
 key points and `minuta` is always topics, decisions and action items, whatever
 the recording held. `auto` decides from the recording: it lists the facts it can
 support before writing anything, tagged as decisions, commitments, open
@@ -180,6 +180,9 @@ the ones those facts earned. A call that ended in disagreement gets its open
 questions; a voice note gets neither those nor an empty heading standing in for
 them. Where the material supports it, `auto` closes with what the stated request
 appears to be after, marked as a reading rather than as something said.
+`requerimientos` reads the recording as software requirements: numbered "shall"
+statements in functional, non-functional, constraint, assumption and open
+question sections, each with its priority where stated and a verbatim quote.
 
 An input that is already a transcript — `.txt`, `.srt` or `.vtt` — skips ffmpeg
 and whisper and only writes the summary next to it, which takes seconds instead

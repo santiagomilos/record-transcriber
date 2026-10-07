@@ -29,6 +29,9 @@ const (
 	KindAuto    Kind = "auto"
 	KindResumen Kind = "resumen"
 	KindMinuta  Kind = "minuta"
+	// KindRequerimientos reads the facts as software requirements, following the
+	// ISO/IEC/IEEE 29148 criteria of atomic, verifiable statements.
+	KindRequerimientos Kind = "requerimientos"
 )
 
 // ParseKind validates a --summary flag value.
@@ -42,8 +45,10 @@ func ParseKind(s string) (Kind, error) {
 		return KindResumen, nil
 	case KindMinuta:
 		return KindMinuta, nil
+	case KindRequerimientos:
+		return KindRequerimientos, nil
 	default:
-		return "", fmt.Errorf("unknown summary kind %q (want none, auto, resumen or minuta)", s)
+		return "", fmt.Errorf("unknown summary kind %q (want none, auto, resumen, minuta or requerimientos)", s)
 	}
 }
 
@@ -126,6 +131,25 @@ nothing for: the topics discussed, the decisions made, and the action items, eac
 and its deadline where one was stated. Add no section beyond those three, whatever else the facts
 turned up.`
 
+const outlineRequerimientos = `Shape for step 2. Read the facts as software requirements and write exactly these sections, in
+this order, omitting none: functional requirements, non-functional requirements, constraints,
+assumptions, and open questions. Add no section beyond those five.
+
+- Write each requirement as one bullet holding one atomic, verifiable statement of the form "the
+  system shall ..." or "<role> shall be able to ...". Split anything joined by "and" or "or".
+  Number it with its section prefix in order of appearance: FR-1, NFR-1, C-1, A-1, Q-1.
+- After the statement, on the same bullet, give: the priority (must, should, could, won't) only
+  where the speakers stated it, otherwise say it is not stated; whether it is explicit or
+  inferred, and for an inferred one the line it follows from; and a verbatim quote of at most 25
+  words as its source.
+- Take requirements only from what someone asked for or committed to. A rejected, hypothetical or
+  merely floated idea is not a requirement, and nothing comes from what a system of this kind
+  usually needs.
+- An implementation detail the speakers imposed is a constraint, not a requirement.
+- Where a requirement is vague ("fast", "easy"), keep the speaker's word and add an open question
+  asking for a measurable target. Where speakers contradict each other, give both versions as one
+  open question instead of choosing one.`
+
 // outlineFor returns the kind-specific half of the instruction.
 func outlineFor(kind Kind) (string, error) {
 	switch kind {
@@ -135,6 +159,8 @@ func outlineFor(kind Kind) (string, error) {
 		return outlineResumen, nil
 	case KindMinuta:
 		return outlineMinuta, nil
+	case KindRequerimientos:
+		return outlineRequerimientos, nil
 	default:
 		return "", fmt.Errorf("summary: no prompt for kind %q", kind)
 	}

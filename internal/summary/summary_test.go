@@ -11,14 +11,16 @@ import (
 
 func TestParseKindAcceptsKnownKinds(t *testing.T) {
 	for input, want := range map[string]Kind{
-		"none":     KindNone,
-		"":         KindNone,
-		"auto":     KindAuto,
-		"resumen":  KindResumen,
-		"minuta":   KindMinuta,
-		"  MINUTA": KindMinuta,
-		"Resumen ": KindResumen,
-		" Auto":    KindAuto,
+		"none":             KindNone,
+		"":                 KindNone,
+		"auto":             KindAuto,
+		"resumen":          KindResumen,
+		"minuta":           KindMinuta,
+		"  MINUTA":         KindMinuta,
+		"requerimientos":   KindRequerimientos,
+		" Requerimientos ": KindRequerimientos,
+		"Resumen ":         KindResumen,
+		" Auto":            KindAuto,
 	} {
 		got, err := ParseKind(input)
 		if err != nil {
@@ -50,8 +52,13 @@ func TestInstructionDiffersPerKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instructionFor(KindMinuta) returned error: %v", err)
 	}
-	if auto == resumen || auto == minuta || resumen == minuta {
-		t.Error("two kinds share an instruction; all three should differ")
+	requerimientos, err := instructionFor(KindRequerimientos)
+	if err != nil {
+		t.Fatalf("instructionFor(KindRequerimientos) returned error: %v", err)
+	}
+	if auto == resumen || auto == minuta || auto == requerimientos ||
+		resumen == minuta || resumen == requerimientos || minuta == requerimientos {
+		t.Error("two kinds share an instruction; all four should differ")
 	}
 }
 
@@ -59,7 +66,7 @@ func TestInstructionDiffersPerKind(t *testing.T) {
 // carry them. This asserts the contract, not the wording: it checks the
 // scratchpad step and the tags, which the rest of the package depends on.
 func TestEveryKindCarriesTheSharedRules(t *testing.T) {
-	for _, kind := range []Kind{KindAuto, KindResumen, KindMinuta} {
+	for _, kind := range []Kind{KindAuto, KindResumen, KindMinuta, KindRequerimientos} {
 		instruction, err := instructionFor(kind)
 		if err != nil {
 			t.Fatalf("instructionFor(%q) returned error: %v", kind, err)
@@ -68,6 +75,21 @@ func TestEveryKindCarriesTheSharedRules(t *testing.T) {
 			if !strings.Contains(instruction, want) {
 				t.Errorf("instructionFor(%q) does not contain %q", kind, want)
 			}
+		}
+	}
+}
+
+func TestRequerimientosInstructionNamesItsSectionsAndPrefixes(t *testing.T) {
+	instruction, err := instructionFor(KindRequerimientos)
+	if err != nil {
+		t.Fatalf("instructionFor(KindRequerimientos) returned error: %v", err)
+	}
+	for _, want := range []string{
+		"functional requirements", "non-functional requirements", "constraints", "assumptions", "open questions",
+		"FR-1", "NFR-1", "C-1", "A-1", "Q-1",
+	} {
+		if !strings.Contains(instruction, want) {
+			t.Errorf("instructionFor(KindRequerimientos) does not contain %q", want)
 		}
 	}
 }
