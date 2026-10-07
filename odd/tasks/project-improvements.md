@@ -30,7 +30,7 @@ Enabled (session config). Runner: `make test` (`go test ./...`, `swift test --pa
 
 ## Delivery
 
-Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Slices: PR1 T1–T3 + T2b (606e77b..), PR2 T4–T5, PR3 T6. T7 is research, no PR. Push and PR creation wait for the user.
+Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Slices: PR1 T1–T3 + T2b (606e77b..77f6955), PR2 T4–T5 (ff73c01..bd77730), PR3 T6. T7 is research, no PR. Push and PR creation wait for the user.
 
 ## Tasks
 
@@ -41,7 +41,7 @@ Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Sli
 - [x] T4 Remove `app/spike/`
 - [x] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
 - [ ] T6 Search over past sessions
-- [ ] T7 Diarization research (no code)
+- [x] T7 Diarization research (no code) - findings under Progress
 
 ## Acceptance criteria
 
