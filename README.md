@@ -224,11 +224,6 @@ whisper-cli, a model, audio hardware, or the network.
 Command Line Tools but is not on the default search paths. With Xcode installed
 they would be unnecessary.
 
-`app/spike/` is the standalone program that proved process taps work here before
-the app was written. It stays as a diagnostic: if a macOS update breaks system
-audio capture, `sh app/spike/build.sh && open bin/AudioSpike.app` answers whether
-the problem is Core Audio or this app.
-
 ## Release
 
 Releases are built on the maintainer's machine and published as GitHub

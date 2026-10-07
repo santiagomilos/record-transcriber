@@ -38,7 +38,7 @@ Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Sli
 - [x] T2 Check `claude --restricted` at app start
 - [x] T3 Remove duplication in `cmd/transcribe/main.go`
 - [x] T2b Summary gate fails open when `claude --help` is unreadable or times out (review finding R4 on T2; regression vs. prior behavior)
-- [ ] T4 Remove `app/spike/`
+- [x] T4 Remove `app/spike/`
 - [ ] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
 - [ ] T6 Search over past sessions
 - [ ] T7 Diarization research (no code)
@@ -76,10 +76,13 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
   - `SummaryAvailability.swift:61-66`: `readToEnd` can block past the timeout if a child of `claude` keeps the pipe open.
   - `LibraryView.swift:89-92`: the load-problem `Banner` has a no-op dismiss.
 
-### T2b (SHA_T2B) route: delegated writer
+### T2b (77f6955) route: delegated writer
 - RED: `make test-swift` failed to compile: `LibraryStore` has no member `dismissLoadProblem` (the `allowsSummaries` expectations for `checking`/`helpUnreadable` were written in the same run and would fail once it compiled).
 - GREEN: `make test` ok (114 Swift tests); `go vet ./...` clean.
 - Gate now blocks only `claudeMissing` and `restrictedUnsupported`; `helpUnreadable` caption reworded as a warning. `helpOutput` reads on a background queue and the 10s deadline bounds the wait (R3). Library load-problem banner dismisses via `LibraryStore.dismissLoadProblem` (R2). Untested: the timeout path and the banner wiring. ~60 authored lines.
+
+### T4 (SHA_T4) route: delegated writer
+- Pure deletion: `app/spike/` (build.sh, main.swift) and the README paragraph. `make test` ok (114 Swift tests); `go vet ./...` clean. No Makefile or .gitignore reference existed. Left untouched: historical mentions in `agent-os/product/roadmap.md` and `agent-os/specs/*` (records, not instructions).
 
 ## Next step
 
