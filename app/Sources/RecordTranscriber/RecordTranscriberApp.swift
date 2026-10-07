@@ -36,7 +36,7 @@ struct MenuBarLabel: View {
                     .symbolEffect(.pulse, options: .repeating)
             }
         } else if model.runner.isRunning {
-            Image(systemName: "waveform.badge.gearshape")
+            Image(systemName: "waveform.badge.magnifyingglass")
                 .symbolEffect(.variableColor.iterative, options: .repeating)
         } else {
             Image(systemName: "waveform")
