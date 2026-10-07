@@ -244,7 +244,7 @@ func parseArgs(args []string) (config, error) {
 	formats := fs.String("format", "txt,srt", "comma-separated output formats: txt, srt, vtt")
 	language := fs.String("lang", "auto", "ISO 639-1 language code, or \"auto\" to detect")
 	model := fs.String("model", modelstore.DefaultModel, "ggml model name")
-	summaryFlag := fs.String("summary", "none", "generate a summary from the transcript: none, auto, resumen, minuta or requerimientos")
+	summaryFlag := fs.String("summary", "none", "generate a summary from the transcript: none, auto or requerimientos")
 	threads := fs.Int("threads", runtime.NumCPU(), "decoding threads")
 	keepWAV := fs.Bool("keep-wav", false, "keep the intermediate 16 kHz WAV file")
 	jsonEvents := fs.Bool("json", false, "report progress as one JSON object per line on stdout, for a program driving this tool")
@@ -279,7 +279,7 @@ func parseArgs(args []string) (config, error) {
 
 	fromTranscript := transcriptExtensions[strings.ToLower(filepath.Ext(input))]
 	if fromTranscript && kind == summary.KindNone {
-		return config{}, errors.New("the input is already a transcript, so -summary is what this run would produce; pass one of auto, resumen, minuta or requerimientos")
+		return config{}, errors.New("the input is already a transcript, so -summary is what this run would produce; pass one of auto or requerimientos")
 	}
 
 	return config{

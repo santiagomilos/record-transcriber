@@ -26,9 +26,7 @@ const (
 	KindNone Kind = "none"
 	// KindAuto lets the shape of the summary follow the recording: the sections
 	// that appear are the ones the transcript gave facts for.
-	KindAuto    Kind = "auto"
-	KindResumen Kind = "resumen"
-	KindMinuta  Kind = "minuta"
+	KindAuto Kind = "auto"
 	// KindRequerimientos reads the facts as software requirements, following the
 	// ISO/IEC/IEEE 29148 criteria of atomic, verifiable statements.
 	KindRequerimientos Kind = "requerimientos"
@@ -41,14 +39,10 @@ func ParseKind(s string) (Kind, error) {
 		return KindNone, nil
 	case KindAuto:
 		return KindAuto, nil
-	case KindResumen:
-		return KindResumen, nil
-	case KindMinuta:
-		return KindMinuta, nil
 	case KindRequerimientos:
 		return KindRequerimientos, nil
 	default:
-		return "", fmt.Errorf("unknown summary kind %q (want none, auto, resumen, minuta or requerimientos)", s)
+		return "", fmt.Errorf("unknown summary kind %q (want none, auto or requerimientos)", s)
 	}
 }
 
@@ -120,17 +114,9 @@ Where the facts support it, add a final section separating what was asked for fr
 underlying goal appears to be, and label it plainly as your reading rather than as something
 that was said.`
 
-// The fixed kinds have to stay fixed: the shared rules above name fact types
+// The fixed kind has to stay fixed: the shared rules above name fact types
 // that are not sections here, and without a closed list the model volunteers a
 // section for them.
-const outlineResumen = `Shape for step 2. A short paragraph saying what the recording was about, then the key points as
-a list. Add nothing else — no headings, and no further sections.`
-
-const outlineMinuta = `Shape for step 2. Exactly these sections, in this order, omitting any the transcript gives you
-nothing for: the topics discussed, the decisions made, and the action items, each with its owner
-and its deadline where one was stated. Add no section beyond those three, whatever else the facts
-turned up.`
-
 const outlineRequerimientos = `Shape for step 2. Read the facts as software requirements and write exactly these sections, in
 this order, omitting none: functional requirements, non-functional requirements, constraints,
 assumptions, and open questions. Add no section beyond those five.
@@ -155,10 +141,6 @@ func outlineFor(kind Kind) (string, error) {
 	switch kind {
 	case KindAuto:
 		return outlineAuto, nil
-	case KindResumen:
-		return outlineResumen, nil
-	case KindMinuta:
-		return outlineMinuta, nil
 	case KindRequerimientos:
 		return outlineRequerimientos, nil
 	default:

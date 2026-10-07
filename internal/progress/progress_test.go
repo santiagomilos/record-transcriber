@@ -17,7 +17,7 @@ func TestJSONWritesOneObjectPerLine(t *testing.T) {
 	emitter.Emit(Progress(37))
 	emitter.Emit(Transcript("es", 167, 103*time.Second))
 	emitter.Emit(Output("txt", "/recordings/reunion.txt"))
-	emitter.Emit(Summary("minuta"))
+	emitter.Emit(Summary("auto"))
 	emitter.Emit(Output("summary", "/recordings/reunion.summary.md"))
 
 	want := `{"event":"input","name":"reunion.mp4","duration_ms":963000}
@@ -26,7 +26,7 @@ func TestJSONWritesOneObjectPerLine(t *testing.T) {
 {"event":"progress","percent":37}
 {"event":"transcript","language":"es","segments":167,"elapsed_ms":103000}
 {"event":"output","kind":"txt","path":"/recordings/reunion.txt"}
-{"event":"stage","stage":"summary","name":"minuta"}
+{"event":"stage","stage":"summary","name":"auto"}
 {"event":"output","kind":"summary","path":"/recordings/reunion.summary.md"}
 `
 	if got := buf.String(); got != want {
@@ -72,13 +72,13 @@ func TestTextRendersTheNarrationATerminalHasAlwaysSeen(t *testing.T) {
 	emitter.Emit(Stage(StageExtract))
 	emitter.Emit(Stage(StageTranscribe))
 	emitter.Emit(Transcript("es", 167, 103*time.Second))
-	emitter.Emit(Summary("minuta"))
+	emitter.Emit(Summary("auto"))
 
 	want := "Input: reunion.mp4 (16m3s)\n" +
 		"Extracting audio...\n" +
 		"Transcribing...\n" +
 		"Done in 1m43s (language: es, 167 segments)\n" +
-		"Generating minuta...\n"
+		"Generating auto...\n"
 	if got := buf.String(); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

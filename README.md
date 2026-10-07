@@ -147,7 +147,7 @@ transcribe -summary auto reunion.srt
 | `-f`, `-format` | `txt,srt` | any of `txt`, `srt`, `vtt` |
 | `-l`, `-lang` | `auto` | ISO 639-1 code, or `auto` to detect |
 | `-m`, `-model` | `large-v3-turbo` | ggml model name |
-| `-summary` | `none` | `none`, `auto`, `resumen`, `minuta`, or `requerimientos` |
+| `-summary` | `none` | `none`, `auto`, or `requerimientos` |
 | `-threads` | number of CPUs | decoding threads |
 | `-keep-wav` | off | keep the intermediate 16 kHz WAV |
 | `-json` | off | report progress as one JSON object per line on stdout |
@@ -171,10 +171,8 @@ transcribe -json reunion.opus
 signed in — no API key. Its presence is checked before transcription starts, so
 a missing dependency fails immediately rather than after the decode.
 
-The kinds differ in who chooses the shape. `resumen` is a paragraph plus
-key points and `minuta` is always topics, decisions and action items, whatever
-the recording held. `auto` decides from the recording: it lists the facts it can
-support before writing anything, tagged as decisions, commitments, open
+The kinds differ in who chooses the shape. `auto` decides from the recording:
+it lists the facts it can support before writing anything, tagged as decisions, commitments, open
 questions, risks, underlying needs or context, and the sections that appear are
 the ones those facts earned. A call that ended in disagreement gets its open
 questions; a voice note gets neither those nor an empty heading standing in for

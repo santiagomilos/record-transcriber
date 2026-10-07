@@ -14,12 +14,8 @@ func TestParseKindAcceptsKnownKinds(t *testing.T) {
 		"none":             KindNone,
 		"":                 KindNone,
 		"auto":             KindAuto,
-		"resumen":          KindResumen,
-		"minuta":           KindMinuta,
-		"  MINUTA":         KindMinuta,
 		"requerimientos":   KindRequerimientos,
 		" Requerimientos ": KindRequerimientos,
-		"Resumen ":         KindResumen,
 		" Auto":            KindAuto,
 	} {
 		got, err := ParseKind(input)
@@ -39,26 +35,31 @@ func TestParseKindRejectsUnknownKind(t *testing.T) {
 	}
 }
 
+func TestParseKindRejectsRemovedKinds(t *testing.T) {
+	for _, input := range []string{"resumen", "minuta", " Minuta "} {
+		_, err := ParseKind(input)
+		if err == nil {
+			t.Errorf("ParseKind(%q) returned nil error, want a rejection", input)
+			continue
+		}
+		want := "unknown summary kind"
+		if !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "want none, auto, resumen") {
+			t.Errorf("ParseKind(%q) error = %q, want %q and the current kinds", input, err, want)
+		}
+	}
+}
+
 func TestInstructionDiffersPerKind(t *testing.T) {
 	auto, err := instructionFor(KindAuto)
 	if err != nil {
 		t.Fatalf("instructionFor(KindAuto) returned error: %v", err)
 	}
-	resumen, err := instructionFor(KindResumen)
-	if err != nil {
-		t.Fatalf("instructionFor(KindResumen) returned error: %v", err)
-	}
-	minuta, err := instructionFor(KindMinuta)
-	if err != nil {
-		t.Fatalf("instructionFor(KindMinuta) returned error: %v", err)
-	}
 	requerimientos, err := instructionFor(KindRequerimientos)
 	if err != nil {
 		t.Fatalf("instructionFor(KindRequerimientos) returned error: %v", err)
 	}
-	if auto == resumen || auto == minuta || auto == requerimientos ||
-		resumen == minuta || resumen == requerimientos || minuta == requerimientos {
-		t.Error("two kinds share an instruction; all four should differ")
+	if auto == requerimientos {
+		t.Error("two kinds share an instruction; both should differ")
 	}
 }
 
@@ -66,7 +67,7 @@ func TestInstructionDiffersPerKind(t *testing.T) {
 // carry them. This asserts the contract, not the wording: it checks the
 // scratchpad step and the tags, which the rest of the package depends on.
 func TestEveryKindCarriesTheSharedRules(t *testing.T) {
-	for _, kind := range []Kind{KindAuto, KindResumen, KindMinuta, KindRequerimientos} {
+	for _, kind := range []Kind{KindAuto, KindRequerimientos} {
 		instruction, err := instructionFor(kind)
 		if err != nil {
 			t.Fatalf("instructionFor(%q) returned error: %v", kind, err)
@@ -198,7 +199,7 @@ func TestGenerateRejectsKindNone(t *testing.T) {
 }
 
 func TestGenerateRejectsEmptyTranscript(t *testing.T) {
-	if _, err := Generate(context.Background(), &asr.Result{}, KindMinuta); err == nil {
+	if _, err := Generate(context.Background(), &asr.Result{}, KindAuto); err == nil {
 		t.Fatal("expected an error for an empty transcript, got nil")
 	}
 }
