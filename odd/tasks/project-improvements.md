@@ -90,6 +90,17 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 - `auto` has its own `outlineAuto`; it never reused the removed outlines. Session `meta.json` stores no summary kind, so only the `summaryKind` preference needed a legacy path: any stored value outside `summaryKinds` loads as `auto` and is written back, so the CLI never receives a removed kind (the one-shot `summaryKindMigratedToAuto` key is gone).
 - Requerimientos check: `git diff` over summary.go, summary_test.go, Preferences and tests shows no change to `KindRequerimientos`, `outlineRequerimientos`, its display name, or its tests; the only touched lines that mention it are the shared kinds list/error text, the progress-label `case` (now `case "requerimientos": kind`), and tests that previously used `resumen`/`minuta` as sample values. Left: `testdata/README.md` mentions of `minuta-before-redesign.summary.md` (historical comparison fixture).
 
+### T7 diarization research (route: delegated research worker, read-only)
+- Recommendation: two steps. First label "me" vs. "others" from the mic and system channels the app captures (needs the recording kept as two tracks or stereo; whisper.cpp `-di` exists but its energy heuristic suffers from mic bleed, so compare per-segment RMS in Go instead). Then diarize the "others" channel with the prebuilt `sherpa-onnx-offline-speaker-diarization` binary (pyannote-segmentation-3.0 + speaker embedding ONNX; v1.13.8 released 2026-09-10, https://github.com/k2-fsa/sherpa-onnx/releases), shelled out from a new `internal/diarize`, assigning each whisper segment the speaker with the largest time overlap.
+- Rejected: sherpa Go bindings (cgo + dylibs), tinydiarize (English small.en only), pyannote.audio/whisperX (Python, HF token). FluidAudio (Swift/Core ML; reported 10.6% DER on AMI, https://github.com/FluidInference/FluidAudio/blob/main/Documentation/Benchmarks.md, unverified) is the alternative if diarization moves into the app.
+- Output shape: `Speaker` on `asr.Segment`; txt `[Speaker 1] text`, srt `Speaker 1: text`, vtt `<v Speaker 1>`; opt-in `-diarize` with graceful fallback.
+- Unverified: osx-arm64 archive contents, pyannote conversion license, no Homebrew formula found.
+- Open product questions: is "me vs. others" enough; Spanish-first; manual model download acceptable; Go CLI vs. Swift app; speaker rename UI.
+
+### Review of T2b–T5 (base bc4f493 through 6172c01)
+- Assessed tier: high. Consent: granted. Four-lens native review: approved and acknowledged (lineage review-de2d1153660c1c5d). Reviewed boundary advances to 6172c01.
+- Non-blocking follow-ups: `SummaryAvailability.swift:70-83` the reader thread and `waitUntilExit` can outlive the 10 s deadline when a child of `claude` holds the pipe (accepted tradeoff in T2b); `PreferencesTests.swift:219` the CLI-args assertion is vacuous; `LibraryStoreTests.swift:161-164` the dismiss test precondition is implicit.
+
 ## Next step
 
 T6
