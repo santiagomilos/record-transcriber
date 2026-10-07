@@ -40,7 +40,7 @@ Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Sli
 - [x] T2b Summary gate fails open when `claude --help` is unreadable or times out (review finding R4 on T2; regression vs. prior behavior)
 - [x] T4 Remove `app/spike/`
 - [x] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
-- [ ] T6 Search over past sessions
+- [x] T6 Search over past sessions
 - [x] T7 Diarization research (no code) - findings under Progress
 
 ## Acceptance criteria
@@ -101,6 +101,12 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 - Assessed tier: high. Consent: granted. Four-lens native review: approved and acknowledged (lineage review-de2d1153660c1c5d). Reviewed boundary advances to 6172c01.
 - Non-blocking follow-ups: `SummaryAvailability.swift:70-83` the reader thread and `waitUntilExit` can outlive the 10 s deadline when a child of `claude` holds the pipe (accepted tradeoff in T2b); `PreferencesTests.swift:219` the CLI-args assertion is vacuous; `LibraryStoreTests.swift:161-164` the dismiss test precondition is implicit.
 
+### T6 (0d79a7c) route: delegated writer
+- RED: `make test-swift` failed to compile: cannot find `SessionSearchIndex` and `LibraryStore` has no member `search`.
+- GREEN: `make test` ok (123 Swift tests, 8 new in `SessionSearchTests`: title, transcript, summary, case/accent, no match, blank query, session without files, store sees text after reload); `go vet ./...` clean.
+- Design: pure `SessionSearchIndex` (name, display name, transcript, summary folded with case/diacritic-insensitive comparison) caches folded text per session URL, read lazily on the first query; `LibraryStore.reload()` invalidates it. UI is a themed field in the sidebar (not `.searchable`, which clashes with the custom dark panel) plus a "Sin resultados para «X»" state. ~216 authored lines.
+- Untested: sidebar wiring in `LibraryView`. Tradeoff: the first search after a reload reads all session files on the main thread (no existing background-load pattern in the store). No match snippet under rows.
+
 ## Next step
 
-T6
+Open PRs (user decision) and diarization product questions
