@@ -85,7 +85,7 @@ func transcribe(cfg config, events progress.Emitter) error {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := interruptContext()
 	defer stop()
 
 	report := func(d modelstore.Download) {
@@ -142,16 +142,10 @@ func transcribe(cfg config, events progress.Emitter) error {
 	}
 
 	if cfg.summaryKind != summary.KindNone {
-		events.Emit(progress.Summary(string(cfg.summaryKind)))
-		text, err := summary.Generate(ctx, result, cfg.summaryKind)
+		path, err := writeSummary(ctx, cfg, result, events)
 		if err != nil {
 			return err
 		}
-		path := cfg.outputBase + ".summary.md"
-		if err := os.WriteFile(path, []byte(text+"\n"), 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
-		}
-		events.Emit(progress.Output("summary", path))
 		written = append(written, path)
 	}
 
@@ -174,24 +168,39 @@ func summarizeTranscript(cfg config, events progress.Emitter) error {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := interruptContext()
 	defer stop()
 
-	events.Emit(progress.Summary(string(cfg.summaryKind)))
-	text, err := summary.Generate(ctx, result, cfg.summaryKind)
+	path, err := writeSummary(ctx, cfg, result, events)
 	if err != nil {
 		return err
 	}
-
-	path := cfg.outputBase + ".summary.md"
-	if err := os.WriteFile(path, []byte(text+"\n"), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-	events.Emit(progress.Output("summary", path))
 	if !cfg.jsonEvents {
 		fmt.Println(path)
 	}
 	return nil
+}
+
+// interruptContext is cancelled by Ctrl-C or SIGTERM, which stops the child
+// processes it is passed to.
+func interruptContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
+// writeSummary generates the summary of result and writes it next to the other
+// outputs, returning its path.
+func writeSummary(ctx context.Context, cfg config, result *asr.Result, events progress.Emitter) (string, error) {
+	events.Emit(progress.Summary(string(cfg.summaryKind)))
+	text, err := summary.Generate(ctx, result, cfg.summaryKind)
+	if err != nil {
+		return "", err
+	}
+	path := cfg.outputBase + ".summary.md"
+	if err := os.WriteFile(path, []byte(text+"\n"), 0o644); err != nil {
+		return "", fmt.Errorf("write %s: %w", path, err)
+	}
+	events.Emit(progress.Output("summary", path))
+	return path, nil
 }
 
 // readTranscript reads back a transcript this tool wrote earlier. Subtitles are
