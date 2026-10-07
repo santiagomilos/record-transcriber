@@ -28,6 +28,11 @@ final class LibraryStore {
         didSet { reload() }
     }
 
+    /// searchIndex caches the text `search` matches against; `reload` drops it.
+    /// The first search after a reload reads every session's files on the
+    /// calling thread, which is the cost of keeping this a plain synchronous call.
+    @ObservationIgnored private var searchIndex = SessionSearchIndex()
+
     /// excludedFolderNames are subfolders that are not sessions.
     private let excludedFolderNames: Set<String>
 
@@ -48,6 +53,7 @@ final class LibraryStore {
     /// read is kept in `loadProblem`, and the rest of the library is still listed.
     func reload() {
         loadProblem = nil
+        searchIndex.invalidate()
         let contents: [URL]
         do {
             contents = try FileManager.default.contentsOfDirectory(
@@ -80,6 +86,12 @@ final class LibraryStore {
             .filter { !excludedFolderNames.contains($0.lastPathComponent) }
             .map(Session.init(folder:))
             .sorted { $0.startedAt > $1.startedAt }
+    }
+
+    /// search lists the sessions whose title, transcript or summary contain the
+    /// query. A blank query lists them all.
+    func search(_ query: String) -> [Session] {
+        searchIndex.search(query, in: sessions)
     }
 
     /// createSession makes the folder for a recording about to start.

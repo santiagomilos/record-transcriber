@@ -15,6 +15,7 @@ struct LibraryView: View {
     /// both open the same field.
     @State private var renaming: Session?
     @State private var newName = ""
+    @State private var query = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -61,8 +62,16 @@ struct LibraryView: View {
 
     // MARK: Sidebar
 
-    private var sessions: [Session] {
-        model.librarySection == .recordings ? model.library.sessions : model.imports.sessions
+    private var store: LibraryStore {
+        model.librarySection == .recordings ? model.library : model.imports
+    }
+
+    private var sessions: [Session] { store.sessions }
+
+    private var visibleSessions: [Session] { store.search(query) }
+
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var loadProblem: String? {
@@ -76,6 +85,7 @@ struct LibraryView: View {
                          title: \.title,
                          selection: $model.librarySection)
                 sectionAction
+                searchField
                 if let progress = model.importProgress {
                     importStatus(progress)
                 }
@@ -102,8 +112,10 @@ struct LibraryView: View {
 
                     if sessions.isEmpty {
                         emptyList
+                    } else if visibleSessions.isEmpty {
+                        noResults
                     } else {
-                        ForEach(sessions) { session in
+                        ForEach(visibleSessions) { session in
                             PanelRow(icon: "waveform",
                                      title: session.displayName,
                                      subtitle: subtitle(for: session),
@@ -127,6 +139,40 @@ struct LibraryView: View {
                 .padding(.bottom, Theme.panelPadding)
             }
         }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.textTertiary)
+            TextField("Buscar en título, transcripción y resumen", text: $query)
+                .textFieldStyle(.plain)
+                .font(Theme.bodyFont)
+                .foregroundStyle(Theme.textPrimary)
+            if isSearching {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Borrar búsqueda")
+            }
+        }
+        .padding(.horizontal, Theme.rowPadding)
+        .padding(.vertical, Theme.Space.sm)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.rowRadius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.rowRadius).strokeBorder(Theme.cardBorder, lineWidth: 1))
+    }
+
+    private var noResults: some View {
+        Text("Sin resultados para «\(query.trimmingCharacters(in: .whitespacesAndNewlines))»")
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Theme.rowPadding)
+            .padding(.vertical, Theme.Space.md)
     }
 
     @ViewBuilder private var sectionAction: some View {
