@@ -42,7 +42,7 @@ final class Preferences {
     }
 
     static let languages = ["auto", "es", "en"]
-    static let summaryKinds = ["none", "auto", "resumen", "minuta"]
+    static let summaryKinds = ["none", "auto", "resumen", "minuta", "requerimientos"]
     static let availableFormats = ["txt", "srt", "vtt"]
     static let defaultModel = "large-v3-turbo"
     /// summaryFontSizes is the range the summary's size buttons step through,
@@ -58,6 +58,7 @@ final class Preferences {
         "auto": "Automático",
         "resumen": "Resumen",
         "minuta": "Minuta",
+        "requerimientos": "Requerimientos",
     ]
 
     /// summaryKindName is the display name for a stored kind, falling back to
@@ -68,9 +69,12 @@ final class Preferences {
 
     /// summaryKindProgressLabel is what the progress line calls the job while it
     /// runs. `auto` is not a word for the thing being written, so it borrows
-    /// "resumen"; only `minuta` names its own output.
+    /// "resumen"; `minuta` and `requerimientos` name their own output.
     static func summaryKindProgressLabel(_ kind: String) -> String {
-        kind == "minuta" ? "minuta" : "resumen"
+        switch kind {
+        case "minuta", "requerimientos": kind
+        default: "resumen"
+        }
     }
 
     /// defaultLibraryFolder is a plain folder in Documents, so a recording can

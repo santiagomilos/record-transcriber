@@ -233,6 +233,7 @@ private let importedAt: Date = {
         #expect(Preferences.summaryKindName(kind) != kind)
     }
     #expect(Preferences.summaryKindName("auto") == "Automático")
+    #expect(Preferences.summaryKindName("requerimientos") == "Requerimientos")
     #expect(Preferences.summaryKindName("desconocido") == "desconocido")
 }
 
@@ -242,4 +243,5 @@ private let importedAt: Date = {
     #expect(Preferences.summaryKindProgressLabel("auto") == "resumen")
     #expect(Preferences.summaryKindProgressLabel("resumen") == "resumen")
     #expect(Preferences.summaryKindProgressLabel("minuta") == "minuta")
+    #expect(Preferences.summaryKindProgressLabel("requerimientos") == "requerimientos")
 }
