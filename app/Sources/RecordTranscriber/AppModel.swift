@@ -54,6 +54,10 @@ final class AppModel {
     /// before doing any work rather than after.
     private(set) var missingTools: [Tool] = Tool.missing
 
+    /// summaryAvailability is whether `claude` can write a summary. It is read
+    /// off the main thread at launch and whenever the tools are rechecked.
+    private(set) var summaryAvailability: SummaryAvailability = .checking
+
     /// activeSession is the recording in progress. It is remembered rather than
     /// looked up again after the capture ends, so stopping cannot silently fail
     /// to find the session it just wrote.
@@ -74,6 +78,11 @@ final class AppModel {
 
     func recheckTools() {
         missingTools = Tool.missing
+        Task { await checkSummaryAvailability() }
+    }
+
+    func checkSummaryAvailability() async {
+        summaryAvailability = await Task.detached { SummaryAvailability.check() }.value
     }
 
     /// setLibraryFolder moves both libraries to a new root.

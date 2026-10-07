@@ -93,7 +93,7 @@ struct SessionDetailView: View {
                     }
                     .buttonStyle(FilledButtonStyle(isProminent: !session.hasSummary))
                     .fixedSize()
-                    .disabled(model.isBusy || claudeIsMissing)
+                    .disabled(model.isBusy || !model.summaryAvailability.allowsSummaries)
                 }
 
                 IconButton(icon: "pencil", help: "Renombrar") {
@@ -116,16 +116,18 @@ struct SessionDetailView: View {
                     .font(Theme.captionFont)
                     .foregroundStyle(Theme.textSecondary)
             }
+
+            // A summary is a `claude` run, so the button that asks for one is
+            // disabled, and this says why, rather than failing after the click.
+            if let reason = model.summaryAvailability.reason, session.summarizableTranscriptURL != nil {
+                Text(reason)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.warning)
+            }
         }
         .padding(.horizontal, Theme.panelPadding + Theme.Space.sm)
         .padding(.top, Theme.Space.lg)
         .padding(.bottom, Theme.Space.lg)
-    }
-
-    /// A summary is a `claude` run, so the button that asks for one is disabled
-    /// rather than failing after the click when the tool is not installed.
-    private var claudeIsMissing: Bool {
-        model.missingTools.contains { $0.binary == Tool.claude.binary }
     }
 
     /// facts is the metadata line under the title: the file an import came

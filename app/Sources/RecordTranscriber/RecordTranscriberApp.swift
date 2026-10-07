@@ -28,6 +28,10 @@ struct MenuBarLabel: View {
     let model: AppModel
 
     var body: some View {
+        icon.task { await model.checkSummaryAvailability() }
+    }
+
+    @ViewBuilder private var icon: some View {
         if model.recorder.isRecording {
             Label {
                 Text(formatDuration(model.recorder.elapsed))
