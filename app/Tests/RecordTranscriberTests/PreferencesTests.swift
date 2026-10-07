@@ -106,8 +106,8 @@ private let importedAt: Date = {
     preferences.summaryKind = "none"
     #expect(preferences.onDemandSummaryKind == "auto")
 
-    preferences.summaryKind = "minuta"
-    #expect(preferences.onDemandSummaryKind == "minuta")
+    preferences.summaryKind = "requerimientos"
+    #expect(preferences.onDemandSummaryKind == "requerimientos")
 }
 
 @Test func overridesTheSummaryKindForASummaryOnlyRun() {
@@ -176,11 +176,11 @@ private let importedAt: Date = {
 
     let first = Preferences(defaults: defaults)
     first.language = "en"
-    first.summaryKind = "resumen"
+    first.summaryKind = "requerimientos"
 
     let second = Preferences(defaults: defaults)
     #expect(second.language == "en")
-    #expect(second.summaryKind == "resumen")
+    #expect(second.summaryKind == "requerimientos")
 }
 
 @Test func formatsDurationsAsMinutesUntilAnHourPasses() {
@@ -192,40 +192,46 @@ private let importedAt: Date = {
     #expect(formatDuration(3723) == "1:02:03")
 }
 
-/// `minuta` was the default before `auto` existed, so an install carrying it is
-/// almost certainly carrying the old default rather than a choice.
-@Test func movesTheOldDefaultOntoAutoOnce() {
+/// `resumen` and `minuta` were removed, and `minuta` was the default before
+/// `auto` existed, so an install carrying either must not send it to the CLI.
+@Test func movesARemovedSummaryKindOntoAuto() {
+    for legacy in ["minuta", "resumen"] {
+        let name = "record-transcriber-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.set(legacy, forKey: "summaryKind")
+
+        let preferences = Preferences(defaults: defaults)
+
+        #expect(preferences.summaryKind == "auto")
+        #expect(defaults.string(forKey: "summaryKind") == "auto")
+    }
+}
+
+@Test func neverPassesARemovedSummaryKindToTheCLI() {
     let name = "record-transcriber-tests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: name)!
     defaults.set("minuta", forKey: "summaryKind")
+    let preferences = Preferences(defaults: defaults)
 
-    let migrated = Preferences(defaults: defaults)
-    #expect(migrated.summaryKind == "auto")
+    let arguments = preferences.transcribeArguments(
+        input: URL(fileURLWithPath: "/x/a.opus"), outputBase: URL(fileURLWithPath: "/x/a"))
+
+    #expect(arguments.contains("auto"))
+    #expect(!arguments.contains("minuta"))
 }
 
-/// Choosing `minuta` again after the migration has run has to stick, which is
-/// what the separate migration key buys.
-@Test func leavesMinutaAloneOnceItHasBeenChosenAgain() {
-    let name = "record-transcriber-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.set("minuta", forKey: "summaryKind")
-
-    let migrated = Preferences(defaults: defaults)
-    #expect(migrated.summaryKind == "auto")
-    migrated.summaryKind = "minuta"
-
-    let relaunched = Preferences(defaults: defaults)
-    #expect(relaunched.summaryKind == "minuta")
-}
-
-/// A kind the user picked deliberately is never touched by the migration.
+/// A kind the user picked deliberately is never touched.
 @Test func leavesADeliberateKindAlone() {
     let name = "record-transcriber-tests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: name)!
-    defaults.set("resumen", forKey: "summaryKind")
+    defaults.set("requerimientos", forKey: "summaryKind")
 
     let preferences = Preferences(defaults: defaults)
-    #expect(preferences.summaryKind == "resumen")
+    #expect(preferences.summaryKind == "requerimientos")
+}
+
+@Test func offersOnlyTheKindsTheCLIAccepts() {
+    #expect(Preferences.summaryKinds == ["none", "auto", "requerimientos"])
 }
 
 @Test func namesEverySummaryKindItOffers() {
@@ -241,7 +247,5 @@ private let importedAt: Date = {
 /// it a resumen while it runs.
 @Test func callsTheRunningJobByWhatItProduces() {
     #expect(Preferences.summaryKindProgressLabel("auto") == "resumen")
-    #expect(Preferences.summaryKindProgressLabel("resumen") == "resumen")
-    #expect(Preferences.summaryKindProgressLabel("minuta") == "minuta")
     #expect(Preferences.summaryKindProgressLabel("requerimientos") == "requerimientos")
 }

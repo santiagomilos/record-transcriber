@@ -42,7 +42,7 @@ final class Preferences {
     }
 
     static let languages = ["auto", "es", "en"]
-    static let summaryKinds = ["none", "auto", "resumen", "minuta", "requerimientos"]
+    static let summaryKinds = ["none", "auto", "requerimientos"]
     static let availableFormats = ["txt", "srt", "vtt"]
     static let defaultModel = "large-v3-turbo"
     /// summaryFontSizes is the range the summary's size buttons step through,
@@ -56,8 +56,6 @@ final class Preferences {
     static let summaryKindNames = [
         "none": "Ninguno",
         "auto": "Automático",
-        "resumen": "Resumen",
-        "minuta": "Minuta",
         "requerimientos": "Requerimientos",
     ]
 
@@ -69,10 +67,10 @@ final class Preferences {
 
     /// summaryKindProgressLabel is what the progress line calls the job while it
     /// runs. `auto` is not a word for the thing being written, so it borrows
-    /// "resumen"; `minuta` and `requerimientos` name their own output.
+    /// "resumen"; `requerimientos` names its own output.
     static func summaryKindProgressLabel(_ kind: String) -> String {
         switch kind {
-        case "minuta", "requerimientos": kind
+        case "requerimientos": kind
         default: "resumen"
         }
     }
@@ -153,17 +151,13 @@ final class Preferences {
         summaryFontSize = min(max(storedSize, Preferences.summaryFontSizes.lowerBound),
                               Preferences.summaryFontSizes.upperBound)
 
-        // `minuta` was the default before `auto` existed, so a stored `minuta`
-        // is almost always the old default rather than a choice. Move it once
-        // and record that, so choosing `minuta` again afterwards sticks.
-        // The write is explicit because property observers do not fire for
-        // assignments made during initialization.
-        if !defaults.bool(forKey: Key.summaryKindMigratedToAuto) {
-            defaults.set(true, forKey: Key.summaryKindMigratedToAuto)
-            if summaryKind == "minuta" {
-                summaryKind = "auto"
-                defaults.set("auto", forKey: Key.summaryKind)
-            }
+        // `resumen` and `minuta` were removed from the CLI. `minuta` was also
+        // the default before `auto` existed, so a stored one is almost always
+        // that default. The write is explicit because property observers do not
+        // fire for assignments made during initialization.
+        if !Preferences.summaryKinds.contains(summaryKind) {
+            summaryKind = "auto"
+            defaults.set("auto", forKey: Key.summaryKind)
         }
     }
 

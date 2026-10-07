@@ -12,7 +12,7 @@ private let eventStream = """
 {"event":"progress","percent":37}
 {"event":"transcript","language":"es","segments":167,"elapsed_ms":103000}
 {"event":"output","kind":"txt","path":"/recordings/2026-09-01 0314/transcript.txt"}
-{"event":"stage","stage":"summary","name":"minuta"}
+{"event":"stage","stage":"summary","name":"auto"}
 {"event":"output","kind":"summary","path":"/recordings/2026-09-01 0314/transcript.summary.md"}
 """
 

@@ -39,7 +39,7 @@ Strategy `ask-on-risk`, chain `stacked-to-main` (user delegated the choice). Sli
 - [x] T3 Remove duplication in `cmd/transcribe/main.go`
 - [x] T2b Summary gate fails open when `claude --help` is unreadable or times out (review finding R4 on T2; regression vs. prior behavior)
 - [x] T4 Remove `app/spike/`
-- [ ] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
+- [x] T5 Remove `resumen` and `minuta` kinds, keep `requerimientos` untouched
 - [ ] T6 Search over past sessions
 - [ ] T7 Diarization research (no code)
 
@@ -81,9 +81,15 @@ Branch `feat/project-improvements` created from `main` (80c0c8d).
 - GREEN: `make test` ok (114 Swift tests); `go vet ./...` clean.
 - Gate now blocks only `claudeMissing` and `restrictedUnsupported`; `helpUnreadable` caption reworded as a warning. `helpOutput` reads on a background queue and the 10s deadline bounds the wait (R3). Library load-problem banner dismisses via `LibraryStore.dismissLoadProblem` (R2). Untested: the timeout path and the banner wiring. ~60 authored lines.
 
-### T4 (SHA_T4) route: delegated writer
+### T4 (ff73c01) route: delegated writer
 - Pure deletion: `app/spike/` (build.sh, main.swift) and the README paragraph. `make test` ok (114 Swift tests); `go vet ./...` clean. No Makefile or .gitignore reference existed. Left untouched: historical mentions in `agent-os/product/roadmap.md` and `agent-os/specs/*` (records, not instructions).
+
+### T5 (3e8ef9a Go/README, 47630f7 Swift) route: delegated writer
+- RED (Go): `go test ./internal/summary` failed: `ParseKind("resumen")`, `("minuta")`, `(" Minuta ")` returned nil error. RED (Swift): `make test-swift` failed 3 issues: `summaryKinds` still listed the removed kinds; a stored `resumen` stayed `resumen`.
+- GREEN: `make test` ok (115 Swift tests, all Go packages); `go vet ./...` clean.
+- `auto` has its own `outlineAuto`; it never reused the removed outlines. Session `meta.json` stores no summary kind, so only the `summaryKind` preference needed a legacy path: any stored value outside `summaryKinds` loads as `auto` and is written back, so the CLI never receives a removed kind (the one-shot `summaryKindMigratedToAuto` key is gone).
+- Requerimientos check: `git diff` over summary.go, summary_test.go, Preferences and tests shows no change to `KindRequerimientos`, `outlineRequerimientos`, its display name, or its tests; the only touched lines that mention it are the shared kinds list/error text, the progress-label `case` (now `case "requerimientos": kind`), and tests that previously used `resumen`/`minuta` as sample values. Left: `testdata/README.md` mentions of `minuta-before-redesign.summary.md` (historical comparison fixture).
 
 ## Next step
 
-Ask the chain strategy (T4 alone exceeds ~400 authored lines), then T4.
+T6
